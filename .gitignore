@@ -1,3 +1,9 @@
+# Avoid editor temp files
 *.swp
+*.swo
+# Avoid utility files
 .build
-/Util-glog*
+_build
+# Avoid archives of this distribution
+/Perf-glog*
+
