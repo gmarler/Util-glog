@@ -1,7 +1,9 @@
+package Util::glog;
+
 use strict;
 use warnings;
 
-package Util::glog;
+use threads;
 
 use Moose;
 use Moose::Util::TypeConstraints;
@@ -18,7 +20,6 @@ use POSIX::RT::Timer            qw();
 use IO::Compress::Bzip2         qw($Bzip2Error);
 use POSIX;
 
-use threads;
 use Thread::Queue;
 
 # Command queue to worker thread
@@ -343,26 +344,9 @@ Supported commands:
 
 sub _worker_thread {
   my ($self) = @_;
-  my ($l)    = $self->logger;
-
-  # Clear my_thread, as we won't be using it here, only in the parent thread,
-  # and we don't want our DEMOLISH to be trying to join a non-existent thread,
-  # or OURSELVES!
-  $self->_my_thread(undef);
+  my ($l)    = Log::Log4perl->get_logger();
 
   $l->debug("Worker thread started");
-
-  # TODO: Print information about the glog object we've just received by
-  #       creating this thread - to make sure the attributes are set as we expect
-  $l->debug("Current child thread object attributes:");
-  $l->debug("OUTPUT PATH:  " . $self->output_path );
-  $l->debug("LOGDIR:       " . $self->logdir );
-  $l->debug("LOGFILE_BASE: " . $self->logfile_base );
-  $l->debug("LOGFILE:      " . $self->logfile );
-  $l->debug("LOGFILE_FH:   " . $self->logfile_fh );
-  $l->debug("UNBUFFERED:   " . $self->unbuffered );
-  $l->debug("COMPRESS:     " . $self->compress );
-  $l->debug("MAX:          " . $self->max );
 
   # Wait for commands to come in
   while (defined(my $item = $command_q->dequeue())) {
@@ -384,8 +368,8 @@ sub _setup_worker_thread {
 
   $l->debug("Setting up for WORKER THREAD");
 
-  my $thr = threads->create(\&_worker_thread,$self);
-#my $thr = threads->create(\&_worker_thread);
+  #my $thr = threads->create(\&_worker_thread,$self);
+  my $thr = threads->create(\&_worker_thread);
 
   $self->_my_thread($thr);
 }
@@ -397,8 +381,9 @@ sub DEMOLISH {
 
   my ($thr) = $self->_my_thread();
 
-  if (defined($thr) && $thr->is_running()) {
-    $l->warn("DEMOLISH: Thread is still running");
+  # Only do this for the parent thread (TID 0)
+  if ((threads->tid() == 0) && defined($thr) && $thr->is_running()) {
+    $l->warn("DEMOLISH: Worker thread is still running");
     # finish with the log file we're currently working on to prevent corruption
     $command_q->enqueue( { command => 'QUIT' } );
     while ($thr->is_running()) {
