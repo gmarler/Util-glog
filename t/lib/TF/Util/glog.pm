@@ -120,8 +120,9 @@ sub test_logfile_base {
   isa_ok($glog, $test->class_name());
 
   # Make sure the logfile_base attribute came out as expected
-  cmp_ok($glog->logfile_base, 'eq', File::Basename::basename($output_path), 'logfile_base attribute set as expected');
-  $glog->DESTROY();
+  cmp_ok($glog->logfile_base, 'eq',
+         File::Basename::basename($output_path),
+         'logfile_base attribute set as expected');
 }
 
 sub test_logfile_creation {
@@ -147,151 +148,150 @@ sub test_logfile_creation {
   cmp_ok($glog->logfile, 'eq', $fname_expected, 'logfile attribute set as expected');
   # Make sure the logfile_fh attribute has been set
   isa_ok($glog->logfile_fh, 'IO::File');
-  $glog->DESTROY();
 }
 
-# sub test_logfile_rotation_nocompress {
-#   my ($test) = shift;
-#   my $dh = $test->{temp_dir};
-#   my ($fname_base) = "test.out";
-#   my (@expected_logfiles, @actual_logfiles);
-#   my ($tempdir_dh);
-# 
-#   isa_ok($dh,'File::Temp::Dir');
-#   my ($output_path) = File::Spec->catfile($dh->dirname, $fname_base);
-# }
+sub test_logfile_rotation_nocompress {
+  my ($test) = shift;
+  my $dh = $test->{temp_dir};
+  my ($fname_base) = "test.out";
+  my (@expected_logfiles, @actual_logfiles);
+  my ($tempdir_dh);
 
-#sub test_logfile_rotation {
-#  my ($test) = shift;
-#  my $dh = $test->{temp_dir};
-#  my ($fname_base) = "test.out";
-#  my (@expected_logfiles, @actual_logfiles);
-#  my ($tempdir_dh);
-#
-#  isa_ok($dh,'File::Temp::Dir');
-#  my ($output_path) = File::Spec->catfile($dh->dirname, $fname_base);
-#
-#  # 1. use Test::MockTime to rotate through one day to make sure file
-#  #    rotation happens correctly.
-#  set_absolute_time( "07/15/2014 00:00:00 -0400", "%m/%d/%Y %H:%M:%S %z" );
-#  # Create the glog object
-#  my $glog = Util::glog->new( output_path => $output_path,);
-#  isa_ok($glog, $test->class_name());
-#
-#  @expected_logfiles =
-#    map { my $fname = $fname_base . "-$_";
-#          $fname = $glog->compress ? $fname .= ".bz2" : $fname;
-#          $fname; }
-#    qw( 20140715 20140716 20140717 20140718 20140719 );
-#
-#  # Move ahead a day and rotate the log a few times
-#  set_absolute_time( "07/16/2014 00:00:00 -0400", "%m/%d/%Y %H:%M:%S %z" );
-#  $glog->rotate_log();
-#  set_absolute_time( "07/17/2014 00:00:00 -0400", "%m/%d/%Y %H:%M:%S %z" );
-#  $glog->rotate_log();
-#  set_absolute_time( "07/18/2014 00:00:00 -0400", "%m/%d/%Y %H:%M:%S %z" );
-#  $glog->rotate_log();
-#  set_absolute_time( "07/19/2014 00:00:00 -0400", "%m/%d/%Y %H:%M:%S %z" );
-#  $glog->rotate_log();
-#  # Make sure all of the files exist still
-#  $tempdir_dh = IO::Dir->new($dh->dirname);
-#  while (defined(my $f_found = $tempdir_dh->read)) {
-#    $f_found =~ /^(\.|\.\.)$/ and next;
-#    push @actual_logfiles, $f_found;
-#  }
-#  $tempdir_dh->close;
-#  eq_or_diff(\@actual_logfiles,\@expected_logfiles,'rotation without deletion');
-#
-#  # 2. use Test::MockTime to rotate through 8 or more days to make sure file
-#  #    rotation and elimination work correctly.
-#  # Does the object have a 'max' attribute?
-#  can_ok($glog,'max');
-#  # Confirm that the default max files to retain is 7 (because we didn't specify
-#  # differently when we created the glog object)
-#  cmp_ok($glog->max, '==', 7, 'default max files to retain is 7');
-#  # Rotate a couple more for a total of 8 logs to have been rotated through
-#  set_absolute_time( "07/20/2014 00:00:00 -0400", "%m/%d/%Y %H:%M:%S %z" );
-#  $glog->rotate_log();
-#  set_absolute_time( "07/21/2014 00:00:00 -0400", "%m/%d/%Y %H:%M:%S %z" );
-#  $glog->rotate_log();
-#  set_absolute_time( "07/22/2014 00:00:00 -0400", "%m/%d/%Y %H:%M:%S %z" );
-#  $glog->rotate_log();
-#  # Now there should only be the most recent 7 still in existence
-#  @actual_logfiles = ();
-#  @expected_logfiles =
-#    map { my $fname = $fname_base . "-$_";
-#          $fname = $glog->compress ? $fname .= ".bz2" : $fname;
-#          $fname; }
-#    qw( 20140716 20140717 20140718 20140719 20140720 20140721 20140722 );
-#  $tempdir_dh = IO::Dir->new($dh->dirname);
-#  while (defined(my $f_found = $tempdir_dh->read)) {
-#    $f_found =~ /^(\.|\.\.)$/ and next;
-#    push @actual_logfiles, $f_found;
-#  }
-#  $tempdir_dh->close;
-#  eq_or_diff(\@actual_logfiles,\@expected_logfiles,'rotation with deletion');
-#
-#  restore_time();
-#}
-#
-#sub test_process_stdin {
-#  my ($test) = shift;
-#  my $dh = $test->{temp_dir};
-#  my ($fname_base) = "process.out";
-#
-#  isa_ok($dh,'File::Temp::Dir');
-#  #$dh->unlink_on_destroy( 0 );
-#  my ($output_path) = File::Spec->catfile($dh->dirname, $fname_base);
-#
-#  set_absolute_time( "07/15/2014 23:59:57 -0400", "%m/%d/%Y %H:%M:%S %z" );
-#
-#  # Create the glog object
-#  my $glog = Util::glog->new( output_path => $output_path,);
-#  isa_ok($glog, $test->class_name());
-#
-#  can_ok($glog, 'process_stdin');
-#
-#  # Launch an mpstat command and redirect its STDOUT to the STDIN of our
-#  # object, so we can validate the data is being passed through to the log file
-#  my $pid;
-#  my $newstdout    = IO::Handle->new();
-#  my $psideCapture = IO::Handle->new();
-#  socketpair($psideCapture, $newstdout, AF_UNIX, SOCK_STREAM, PF_UNSPEC) or
-#    croak("socketpair: $!");
-#
-#  {
-#    # We're going to futz with global STDIN here, so let's make sure we
-#    # only allow that to survive until after this block, then restore the "true"
-#    # value
-#    local *STDIN;
-#
-#    if ($pid = fork()) {
-#      # parent
-#      $newstdout->close();
-#      my $fn = $psideCapture->fileno();
-#      open(STDIN, "<&=$fn") or croak("redirect stdin $!");
-#    } elsif (defined $pid) {
-#      #child
-#      $psideCapture->close();
-#      my $fn = $newstdout->fileno();
-#      open(STDOUT, ">&=$fn") or croak("redirect stdout: $!");
-#      exec("/bin/mpstat -Td 1 7") or croak("exec: $!");
-#      # We better never get here
-#      return;
-#    } else {
-#      croak("Can't fork: $!");
-#    }
-#    # TODO: Do we need to make process_stdin() return something meaningful?
-#    my $retval = $glog->process_stdin();
-#    diag "Return value from process_stdin() is: $retval";
-#  }
-#
-#  # Wait on child PID to finish
-#  my $kid = waitpid($pid, 0);
-#  cmp_ok($kid, '==', $pid, "Waited on Child PID successful");
-#
-#  restore_time();
-#}
+  isa_ok($dh,'File::Temp::Dir');
+  my ($output_path) = File::Spec->catfile($dh->dirname, $fname_base);
+}
+
+sub test_logfile_rotation {
+  my ($test) = shift;
+  my $dh = $test->{temp_dir};
+  my ($fname_base) = "test.out";
+  my (@expected_logfiles, @actual_logfiles);
+  my ($tempdir_dh);
+
+  isa_ok($dh,'File::Temp::Dir');
+  my ($output_path) = File::Spec->catfile($dh->dirname, $fname_base);
+
+  # 1. use Test::MockTime to rotate through one day to make sure file
+  #    rotation happens correctly.
+  set_absolute_time( "07/15/2014 00:00:00 -0400", "%m/%d/%Y %H:%M:%S %z" );
+  # Create the glog object
+  my $glog = Util::glog->new( output_path => $output_path,);
+  isa_ok($glog, $test->class_name());
+
+  @expected_logfiles =
+    map { my $fname = $fname_base . "-$_";
+          $fname = $glog->compress ? $fname .= ".bz2" : $fname;
+          $fname; }
+    qw( 20140715 20140716 20140717 20140718 20140719 );
+
+  # Move ahead a day and rotate the log a few times
+  set_absolute_time( "07/16/2014 00:00:00 -0400", "%m/%d/%Y %H:%M:%S %z" );
+  $glog->rotate_log();
+  set_absolute_time( "07/17/2014 00:00:00 -0400", "%m/%d/%Y %H:%M:%S %z" );
+  $glog->rotate_log();
+  set_absolute_time( "07/18/2014 00:00:00 -0400", "%m/%d/%Y %H:%M:%S %z" );
+  $glog->rotate_log();
+  set_absolute_time( "07/19/2014 00:00:00 -0400", "%m/%d/%Y %H:%M:%S %z" );
+  $glog->rotate_log();
+  # Make sure all of the files exist still
+  $tempdir_dh = IO::Dir->new($dh->dirname);
+  while (defined(my $f_found = $tempdir_dh->read)) {
+    $f_found =~ /^(\.|\.\.)$/ and next;
+    push @actual_logfiles, $f_found;
+  }
+  $tempdir_dh->close;
+  eq_or_diff(\@actual_logfiles,\@expected_logfiles,'rotation without deletion');
+
+  # 2. use Test::MockTime to rotate through 8 or more days to make sure file
+  #    rotation and elimination work correctly.
+  # Does the object have a 'max' attribute?
+  can_ok($glog,'max');
+  # Confirm that the default max files to retain is 7 (because we didn't specify
+  # differently when we created the glog object)
+  cmp_ok($glog->max, '==', 7, 'default max files to retain is 7');
+  # Rotate a couple more for a total of 8 logs to have been rotated through
+  set_absolute_time( "07/20/2014 00:00:00 -0400", "%m/%d/%Y %H:%M:%S %z" );
+  $glog->rotate_log();
+  set_absolute_time( "07/21/2014 00:00:00 -0400", "%m/%d/%Y %H:%M:%S %z" );
+  $glog->rotate_log();
+  set_absolute_time( "07/22/2014 00:00:00 -0400", "%m/%d/%Y %H:%M:%S %z" );
+  $glog->rotate_log();
+  # Now there should only be the most recent 7 still in existence
+  @actual_logfiles = ();
+  @expected_logfiles =
+    map { my $fname = $fname_base . "-$_";
+          $fname = $glog->compress ? $fname .= ".bz2" : $fname;
+          $fname; }
+    qw( 20140716 20140717 20140718 20140719 20140720 20140721 20140722 );
+  $tempdir_dh = IO::Dir->new($dh->dirname);
+  while (defined(my $f_found = $tempdir_dh->read)) {
+    $f_found =~ /^(\.|\.\.)$/ and next;
+    push @actual_logfiles, $f_found;
+  }
+  $tempdir_dh->close;
+  eq_or_diff(\@actual_logfiles,\@expected_logfiles,'rotation with deletion');
+
+  restore_time();
+}
+
+sub test_process_stdin {
+  my ($test) = shift;
+  my $dh = $test->{temp_dir};
+  my ($fname_base) = "process.out";
+
+  isa_ok($dh,'File::Temp::Dir');
+  #$dh->unlink_on_destroy( 0 );
+  my ($output_path) = File::Spec->catfile($dh->dirname, $fname_base);
+
+  set_absolute_time( "07/15/2014 23:59:57 -0400", "%m/%d/%Y %H:%M:%S %z" );
+
+  # Create the glog object
+  my $glog = Util::glog->new( output_path => $output_path,);
+  isa_ok($glog, $test->class_name());
+
+  can_ok($glog, 'process_stdin');
+
+  # Launch an mpstat command and redirect its STDOUT to the STDIN of our
+  # object, so we can validate the data is being passed through to the log file
+  my $pid;
+  my $newstdout    = IO::Handle->new();
+  my $psideCapture = IO::Handle->new();
+  socketpair($psideCapture, $newstdout, AF_UNIX, SOCK_STREAM, PF_UNSPEC) or
+    croak("socketpair: $!");
+
+  {
+    # We're going to futz with global STDIN here, so let's make sure we
+    # only allow that to survive until after this block, then restore the "true"
+    # value
+    local *STDIN;
+
+    if ($pid = fork()) {
+      # parent
+      $newstdout->close();
+      my $fn = $psideCapture->fileno();
+      open(STDIN, "<&=$fn") or croak("redirect stdin $!");
+    } elsif (defined $pid) {
+      #child
+      $psideCapture->close();
+      my $fn = $newstdout->fileno();
+      open(STDOUT, ">&=$fn") or croak("redirect stdout: $!");
+      exec("/bin/mpstat -Td 1 7") or croak("exec: $!");
+      # We better never get here
+      return;
+    } else {
+      croak("Can't fork: $!");
+    }
+    # TODO: Do we need to make process_stdin() return something meaningful?
+    my $retval = $glog->process_stdin();
+    diag "Return value from process_stdin() is: $retval";
+  }
+
+  # Wait on child PID to finish
+  my $kid = waitpid($pid, 0);
+  cmp_ok($kid, '==', $pid, "Waited on Child PID successful");
+
+  restore_time();
+}
 #
 #sub test_signals {
 #  my ($test) = shift;
@@ -326,27 +326,27 @@ sub test_logfile_creation {
 #  #sleep 5;
 #  restore_time();
 #}
-#
-#sub test_refresh_expiration {
-#  my ($test) = shift;
-#  my $dh = $test->{temp_dir};
-#  my ($fname_base) = "refresh.out";
-#
-#  my ($output_path) = File::Spec->catfile($dh->dirname, $fname_base);
-#
-#  set_absolute_time( "07/15/2014 00:00:00 -0400", "%m/%d/%Y %H:%M:%S %z" );
-#
-#  # Create the glog object
-#  my $glog = Util::glog->new( output_path => $output_path,);
-#  isa_ok($glog, $test->class_name());
-#
-#  $glog->_refresh_expiration();
-#  cmp_ok($glog->_expiration, '<=', 24*60*60, "Expiration <= a day");
-#  cmp_ok($glog->_expiration,  '>', 24*60*60 - 50, "Expiration > day - 10 secs");
-#
-#  restore_time();
-#}
-#
+
+sub test_refresh_expiration {
+  my ($test) = shift;
+  my $dh = $test->{temp_dir};
+  my ($fname_base) = "refresh.out";
+
+  my ($output_path) = File::Spec->catfile($dh->dirname, $fname_base);
+
+  set_absolute_time( "07/15/2014 00:00:00 -0400", "%m/%d/%Y %H:%M:%S %z" );
+
+  # Create the glog object
+  my $glog = Util::glog->new( output_path => $output_path,);
+  isa_ok($glog, $test->class_name());
+
+  $glog->_refresh_expiration();
+  cmp_ok($glog->_expiration, '<=', 24*60*60, "Expiration <= a day");
+  cmp_ok($glog->_expiration,  '>', 24*60*60 - 50, "Expiration > day - 10 secs");
+
+  restore_time();
+}
+
 #sub test_inline_compress {
 #  my ($test) = shift;
 #  my $dh = $test->{temp_dir};

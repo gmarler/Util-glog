@@ -69,7 +69,6 @@ sub BUILD {
   # TODO: Set the logfile name, and create the actual file handle, thus
   # initializing logfile and logfile_fh
   $self->set_logfile();
-  $self->_setup_worker_thread();
 }
 
 sub _build_logdir {
@@ -139,6 +138,7 @@ sub generic_ts {
 sub process_stdin {
   my ($self) = @_;
 
+  $self->_setup_worker_thread();
   my $thr = $self->_my_thread();
 
   my ($l)  = $self->logger;
@@ -368,7 +368,6 @@ sub _setup_worker_thread {
 
   $l->debug("Setting up for WORKER THREAD");
 
-  #my $thr = threads->create(\&_worker_thread,$self);
   my $thr = threads->create(\&_worker_thread);
 
   $self->_my_thread($thr);
@@ -393,7 +392,11 @@ sub DEMOLISH {
       # Join with the now finished compression thread
       $l->debug("Waiting to 'join' the worker thread");
       my @ReturnData = $thr->join();
-      $l->debug(@ReturnData);
+      if ($ReturnData[0] == 1) {
+        $l->debug("Worker Thread finished with expected result");
+      } else {
+        $l->debug(@ReturnData);
+      }
       if (my $err = $thr->error()) {
         $l->error("Thread error: $err");
       }
