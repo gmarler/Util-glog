@@ -1,0 +1,9 @@
+#!/home/gmarler/perl5/perlbrew/perls/perl-5.18.2-THREADS/bin/perl
+
+use lib qw( ./lib );
+
+use Util::glog;
+
+my $glog = Util::glog->new({ output_path => '/tmp/mpstat.out' });
+
+$glog->process_stdin();

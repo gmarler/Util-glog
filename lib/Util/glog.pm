@@ -3,8 +3,6 @@ package Util::glog;
 use strict;
 use warnings;
 
-use threads;
-
 use Moose;
 use Moose::Util::TypeConstraints;
 with 'MooseX::Log::Log4perl';
@@ -18,14 +16,9 @@ use DateTime                    qw();
 use DateTime::Format::Duration  qw();
 use POSIX::RT::Timer            qw();
 use IO::Compress::Bzip2         qw($Bzip2Error);
+use Socket                      qw(PF_UNSPEC SOCK_STREAM AF_UNIX);
 use POSIX;
-
-use Thread::Queue;
-
-# Command queue to worker thread
-my $command_q  = Thread::Queue->new();
-# Completion queue being reported back to parent thread
-my $complete_q = Thread::Queue->new();
+use Carp;
 
 # The absolute output path for the logfile in question
 has output_path  => ( is => 'ro', isa => 'Str', );
@@ -58,8 +51,9 @@ has _expiration     => ( is => 'rw', isa => 'Num',
                            my ($self) = shift;
                            $self->_refresh_expiration();
                          }  );
-has _my_thread      => ( is => 'rw', isa => 'Any' );
-
+has _worker_pid     => ( is => 'rw', isa => 'Num' );
+has _Parent         => ( is => 'rw', isa => 'IO::Handle' );
+has _Worker         => ( is => 'rw', isa => 'IO::Handle' );
 
 
 sub BUILD {
@@ -119,13 +113,16 @@ sub set_logfile {
   $fh = IO::File->new("$fname",">>") or 
     $log->logdie("Unable to open $fname");
 
-  if ($self->compress) {
-    my $zh = IO::Compress::Bzip2->new($fh, Append => 1, AutoClose => 1,
-                                           BlockSize100K => 9, );
-    $self->logfile_fh($zh);
-  } else {
-    $self->logfile_fh($fh);
-  }
+  $self->logfile_fh($fh);
+
+  # NOTE: Moved into forked worker PID
+  # if ($self->compress) {
+  #   my $zh = IO::Compress::Bzip2->new($fh, Append => 1, AutoClose => 1,
+  #                                          BlockSize100K => 9, );
+  #   $self->logfile_fh($zh);
+  # } else {
+  #   $self->logfile_fh($fh);
+  # }
 }
 
 sub generic_ts {
@@ -138,18 +135,29 @@ sub generic_ts {
 sub process_stdin {
   my ($self) = @_;
 
-  $self->_setup_worker_thread();
-  my $thr = $self->_my_thread();
+  my ($l)    = $self->logger;
+  my $log_fh = $self->logfile_fh();
 
-  my ($l)  = $self->logger;
-  my $fh   = $self->logfile_fh();
+  $self->_setup_worker_pid();
+
+  my $Parent   = $self->_Parent();
+  # Set reading from Worker to be non-blocking
+  $Parent->blocking( 0 ) or croak("Unable to set non-blocking");
 
   # One shot timer till the first rotation
   my $t = POSIX::RT::Timer->new( value => $self->_expiration, interval => 0, signal => SIGRTMIN   );
 
   # Start the logging...
   while (my $line = <STDIN>) {
-    $fh->print("$line");
+    my $cbuf;                   # Compressed buffer read from worker
+    my $bytes_before_compress;  # Bytes before compression
+    my $bytes_after_compress;   # Bytes after  compression
+    $Parent->print("$line");    # Into Worker
+    # If Worker ready to send back, then receive and write to actual file
+    if ($bytes_after_compress = $Parent->read($cbuf,32)) {
+      $log_fh->print($cbuf);
+    }
+
     # Handle signal indicating to rotate log files when received
     if ($self->received_rotate) {
       $self->received_rotate(0);
@@ -165,11 +173,8 @@ sub process_stdin {
         sleep($secs_to_delay);
       }
 
-      # TODO: convert from calling rotate_log directly to sending command to
-      #       worker thread
+      # Rotate Log in parent process
       $self->rotate_log(); 
-
-      $command_q->enqueue( { command => 'ROTATELOG' } );
 
       # Set up the next expiration of the rotation timer
       $l->info("Expiration refreshed to " . $self->_expiration . " seconds");
@@ -179,17 +184,12 @@ sub process_stdin {
     if ($self->received_signal) {
       $l->info("Received a termination signal of some kind");
       $self->received_signal(0);
-      # finish with the log file we're currently working on
-      $command_q->enqueue( { command => 'QUIT' } );
-      # Join with the now finished compression thread
-      $l->debug("Waiting to 'join' the worker thread");
-      my @ReturnData = $thr->join();
+      # TODO: wait for now finished worker child pid
       last;
     }
   }
 
   # Appears to be needed for Bzip2 compressed files
-  # TODO: Move to worker thread
   $self->logfile_fh->flush();
   $self->logfile_fh->close();
 }
@@ -229,8 +229,8 @@ sub rotate_log {
   @found_logfiles = grep { $_ =~ $lf_re; } @all_logfiles;
   #$log->debug(join "\n", @found_logfiles);
 
-  @logfiles_to_delete = sort { (my $adate = $a) =~ m/-(\d{8}+)(?:\.bz2)?/;
-                               (my $bdate = $b) =~ m/-(\d{8}+)(?:\.bz2)?/;
+  @logfiles_to_delete = sort { (my $adate = $a) =~ m/-(\d{8})(?:\.bz2)?/;
+                               (my $bdate = $b) =~ m/-(\d{8})(?:\.bz2)?/;
                                $bdate cmp $adate; } @found_logfiles;
   #$log->debug("Sorted before logfiles to delete:\n" . join "\n", @logfiles_to_delete);
   @logfiles_to_retain = splice @logfiles_to_delete, 0, $self->max; 
@@ -320,57 +320,59 @@ sub _refresh_expiration {
   }
 }
 
-=head2 _worker_thread
-
-Supported commands:
-
-=over 4
-
-=item CREATELOG
-
-=item WRITELOG
-
-=item ROTATELOG
-
-=item CLOSELOG
-
-=item COMPRESSLOG
-
-=item QUIT
-
-=back
+=head2 _worker_pid
 
 =cut
 
-sub _worker_thread {
+sub _worker_pid_task {
   my ($self) = @_;
   my ($l)    = Log::Log4perl->get_logger();
+  my ($buf);
 
-  $l->debug("Worker thread started");
+  $l->debug("Worker child PID started");
+  my $Worker = $self->_Worker();
 
-  # Wait for commands to come in
-  while (defined(my $item = $command_q->dequeue())) {
-    my $cmd = $item->{command};
-    if ($cmd eq 'QUIT') {
-      # TODO: close up file and exit thread
-      $l->debug("Worker thread received $cmd command");
-      $l->debug("Worker thread exiting");
-      return 1;
-    } elsif ($cmd eq 'ROTATELOG') {
-      $l->debug("Worker thread received $cmd command");
-    }
+  # TODO: Read socket for data from parent, and filter through
+  #       IO::Compress::Bzip2
+  #my $zh = IO::Compress::Bzip2->new($Worker, BlockSize100K => 9, );
+  my $zh = IO::Compress::Bzip2->new($Worker, );
+
+  while (my $byte_count = $Worker->read($buf,1024)) {
+    $zh->print($buf);
   }
 }
 
-sub _setup_worker_thread {
+sub _setup_worker_pid {
   my ($self) = @_;
   my ($l)    = $self->logger;
+  my $pid;
+  # Parent side of socket
+  my $Parent = IO::Handle->new();
+  # Worker side of socket
+  my $Worker = IO::Handle->new();
 
-  $l->debug("Setting up for WORKER THREAD");
+  $l->debug("Setting up for WORKER PID");
 
-  my $thr = threads->create(\&_worker_thread);
+  socketpair($Parent, $Worker, AF_UNIX, SOCK_STREAM, PF_UNSPEC) or
+    croak("socketpair: $!");
 
-  $self->_my_thread($thr);
+  $self->_Parent($Parent);
+  $self->_Worker($Worker);
+
+  if ($pid = fork()) {
+    # parent
+    $Worker->close();
+    $self->_worker_pid($pid);
+    return 1;
+  } elsif (defined $pid) {
+    #child
+    $Parent->close();
+    $self->_worker_pid_task();
+    # We better never get here
+    return;
+  } else {
+    croak("Can't fork: $!");
+  }
 }
 
 
@@ -378,31 +380,11 @@ sub DEMOLISH {
   my $self = shift;
   my ($l)    = $self->logger;
 
-  my ($thr) = $self->_my_thread();
+  my ($worker_pid) = $self->_worker_pid();
 
-  # Only do this for the parent thread (TID 0)
-  if ((threads->tid() == 0) && defined($thr) && $thr->is_running()) {
-    $l->warn("DEMOLISH: Worker thread is still running");
-    # finish with the log file we're currently working on to prevent corruption
-    $command_q->enqueue( { command => 'QUIT' } );
-    while ($thr->is_running()) {
-      sleep(1);
-    }
-    if ($thr->is_joinable()) {
-      # Join with the now finished compression thread
-      $l->debug("Waiting to 'join' the worker thread");
-      my @ReturnData = $thr->join();
-      if ($ReturnData[0] == 1) {
-        $l->debug("Worker Thread finished with expected result");
-      } else {
-        $l->debug(@ReturnData);
-      }
-      if (my $err = $thr->error()) {
-        $l->error("Thread error: $err");
-      }
-    } else {
-      $l->error("Unable to join worker thread");
-    }
+  # Only do this for the parent PID
+  if ($worker_pid) {
+    $l->warn("DEMOLISH: Worker PID is still running");
   }
 }
 
