@@ -110,7 +110,7 @@ sub set_logfile {
  
   $self->logfile($fname);
 
-  $fh = IO::File->new("$fname",">>") or 
+  $fh = IO::File->new("$fname",">>") or
     $log->logdie("Unable to open $fname");
 
   $self->logfile_fh($fh);
@@ -141,11 +141,13 @@ sub process_stdin {
   $self->_setup_worker_pid();
 
   my $Parent   = $self->_Parent();
+
   # Set reading from Worker to be non-blocking
   $Parent->blocking( 0 ) or croak("Unable to set non-blocking");
 
   # One shot timer till the first rotation
-  my $t = POSIX::RT::Timer->new( value => $self->_expiration, interval => 0, signal => SIGRTMIN   );
+  my $t = POSIX::RT::Timer->new( value => $self->_expiration,
+                                 interval => 0, signal => SIGRTMIN );
 
   # Start the logging...
   while (my $line = <STDIN>) {
@@ -154,7 +156,7 @@ sub process_stdin {
     my $bytes_after_compress;   # Bytes after  compression
     $Parent->print("$line");    # Into Worker
     # If Worker ready to send back, then receive and write to actual file
-    if ($bytes_after_compress = $Parent->read($cbuf,32)) {
+    if ($bytes_after_compress = $Parent->read($cbuf,80)) {
       $log_fh->print($cbuf);
     }
 
@@ -184,12 +186,13 @@ sub process_stdin {
     if ($self->received_signal) {
       $l->info("Received a termination signal of some kind");
       $self->received_signal(0);
-      # TODO: wait for now finished worker child pid
       last;
     }
   }
 
-  # Appears to be needed for Bzip2 compressed files
+  # If we fell out of the loop above, we now need to flush everything to the
+  # worker process, then flush and close the final log file
+
   $self->logfile_fh->flush();
   $self->logfile_fh->close();
 }

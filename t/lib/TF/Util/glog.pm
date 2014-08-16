@@ -47,10 +47,10 @@ sub test_startup {
   # 'truthy' value
   #if ( exists($ENV{'LIVE_TEST_DATA'}) and $ENV{'LIVE_TEST_DATA'} ) {
   #  # TODO: Only proceed if we're running on Solaris 11 or later
-  #  diag "LIVE_TEST_DATA is set: testing with live data";
+  #  note "LIVE_TEST_DATA is set: testing with live data";
   #} else {
-  #  diag "Testing with canned data";
-  #  diag "If you want to test with live data, set envvar LIVE_TEST_DATA=1";
+  #  note "Testing with canned data";
+  #  note "If you want to test with live data, set envvar LIVE_TEST_DATA=1";
   #}
   #$test->test_glog( $test->class_name->new() );
 }
@@ -283,7 +283,7 @@ sub test_process_stdin {
     }
     # TODO: Do we need to make process_stdin() return something meaningful?
     my $retval = $glog->process_stdin();
-    diag "Return value from process_stdin() is: $retval";
+    note "Return value from process_stdin() is: $retval";
   }
 
   # Wait on child PID to finish
