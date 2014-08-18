@@ -153,6 +153,8 @@ sub process_stdin {
   $Parent->blocking( 0 ) or croak("Unable to set non-blocking");
 
   # One shot timer till the first rotation
+  $l->debug("Setting timer to rotate log for " . $self->_expiration .
+            " seconds from now");
   my $t = POSIX::RT::Timer->new( value => $self->_expiration,
                                  interval => 0, signal => SIGRTMIN );
 
