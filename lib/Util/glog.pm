@@ -108,7 +108,7 @@ sub set_logfile {
   }
   $fname = File::Spec->catfile($self->logdir,$self->logfile_base . ${suffix});
   #$log->debug("Going to set logfile attribute to: $fname");
- 
+
   $self->logfile($fname);
 
   $fh = IO::File->new("$fname",">>") or
@@ -271,7 +271,7 @@ sub rotate_log {
                                (my $bdate = $b) =~ m/-(\d{8})(?:\.bz2)?/;
                                $bdate cmp $adate; } @found_logfiles;
   #$log->debug("Sorted before logfiles to delete:\n" . join "\n", @logfiles_to_delete);
-  @logfiles_to_retain = splice @logfiles_to_delete, 0, $self->max; 
+  @logfiles_to_retain = splice @logfiles_to_delete, 0, $self->max;
   #$log->debug("Logfiles to keep\n" . join "\n", @logfiles_to_retain);
   #$log->debug("Logfiles to delete:\n" . join "\n", @logfiles_to_delete);
   @logfiles_to_delete = map { $_ = File::Spec->catfile($self->logdir, $_); }
@@ -331,7 +331,7 @@ sub _refresh_expiration {
                                         );
 
   $l->debug("MIDNIGHT " . $midnight->strftime("%D %T") );
-  
+
   # Get the duration from now till midnight
   my $dur = $midnight->subtract_datetime_absolute($now);
 
@@ -346,7 +346,7 @@ sub _refresh_expiration {
 
   $l->debug("SECONDS till midnight: $secs_till_midnight");
   $l->debug("NORMALIZED TIME till midnight: $time_till_midnight");
-   
+
   $self->_expiration($secs_till_midnight);
 
   return $secs_till_midnight;
