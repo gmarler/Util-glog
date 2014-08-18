@@ -10,6 +10,7 @@ use namespace::autoclean;
 
 use Log::Log4perl               qw(:easy);
 use File::Basename              qw();
+use IO::Handle                  qw();
 use IO::Dir                     qw();
 use File::Spec                  qw();
 use DateTime                    qw();
@@ -136,6 +137,12 @@ sub process_stdin {
   my ($self) = @_;
 
   my ($l)    = $self->logger;
+  my $stdin_fh = IO::Handle->new();
+  if ($stdin_fh->fdopen(fileno(STDIN),"r")) {
+    $l->debug("Converted STDIN into an IO::Handle");
+  } else {
+    $l->logdie("Unable to convert STDIN into an IO::Handle");
+  }
   my $log_fh = $self->logfile_fh();
 
   $self->_setup_worker_pid();
@@ -150,11 +157,12 @@ sub process_stdin {
                                  interval => 0, signal => SIGRTMIN );
 
   # Start the logging...
-  while (my $line = <STDIN>) {
+  while (my $line = $stdin_fh->getline()) {
     my $cbuf;                   # Compressed buffer read from worker
     my $bytes_before_compress;  # Bytes before compression
     my $bytes_after_compress;   # Bytes after  compression
     $Parent->print("$line");    # Into Worker
+
     # If Worker ready to send back, then receive and write to actual file
     if ($bytes_after_compress = $Parent->read($cbuf,80)) {
       $log_fh->print($cbuf);
@@ -189,15 +197,37 @@ sub process_stdin {
     if ($self->received_signal) {
       $l->info("Received a termination signal of some kind");
       $self->received_signal(0);
+      $Parent->autoflush(1);
       last;
     }
   }
 
-  # If we fell out of the loop above, we now need to flush everything to the
-  # worker process, then flush and close the final log file
-
-  $self->logfile_fh->flush();
-  $self->logfile_fh->close();
+  # If we fell out of the loop above, we now need to:
+  # 1. Close the pipe from the incoming data flow
+  $stdin_fh->close();
+  # 2. Flush everything to the worker process, send a termination signal
+  #    to it, and read the last from it.
+  #    Make sure to kill it off and reap its exit value
+  # TODO: Make sure it's still alive first, if not, don't bother with this
+  my ($final_cbuf);
+  $Parent->flush();
+  if ($self->_worker_pid()) {
+    kill 'TERM', $self->_worker_pid();
+  }
+  while ($Parent->read($final_cbuf,1024)) {
+    $log_fh->print($final_cbuf);
+  }
+  $l->debug("Waiting for WORKER PID to finish");
+  my $wp_pid = waitpid($self->_worker_pid(), 0);
+  if ($wp_pid == $self->_worker_pid()) {
+    $l->debug("Worker PID $wp_pid exited with status: " . $?);
+    $self->_worker_pid(0);  # For the benefit of DEMOLISH()
+  } else {
+    $l->warn("waitpid on Worker PID returned $wp_pid");
+  }
+  # 3. Flush and close the final log file
+  $log_fh->flush();
+  $log_fh->close();
 }
 
 sub rotate_log {
@@ -345,7 +375,19 @@ sub _worker_pid_task {
 
   while (my $byte_count = $Worker->read($buf,1024)) {
     $zh->print($buf);
+    if ($self->received_signal()) {
+      $l->debug("WORKER PID received TERM signal");
+      $Worker->autoflush(1);
+      $zh->autoflush(1);
+      last;
+    }
   }
+  # If we get here, we've been terminated
+  $zh->flush();
+  $zh->close();
+  $Worker->flush();
+  $Worker->close();
+  exit(0);
 }
 
 sub _setup_worker_pid {
@@ -372,6 +414,14 @@ sub _setup_worker_pid {
     return 1;
   } elsif (defined $pid) {
     #child
+    eval {
+      # Setup signals that would normally cause immediate termination, and
+      # corruption of bzip2 archives otherwise
+      for my $sig (qw(TERM)) {
+        $SIG{$sig} = sub {  my $sig = shift; print "WORKER PID Received $sig\n";
+                            $self->received_signal(1); };
+      }
+    };
     $Parent->close();
     $self->_worker_pid_task();
     # We better never get here

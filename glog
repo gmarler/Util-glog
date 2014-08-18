@@ -1,9 +1,56 @@
 #!/home/gmarler/perl5/perlbrew/perls/perl-5.18.2-THREADS/bin/perl
 
-use lib qw( ./lib );
+use strict;
+use warnings;
 
+use lib './lib';
+
+use Getopt::Long;
 use Util::glog;
 
-my $glog = Util::glog->new({ output_path => '/tmp/mpstat.out' });
+# Log::Log4perl Configuration in a string ...
+my $conf = q(
+  log4perl.rootLogger          = DEBUG, Logfile, Screen
+  #log4perl.rootLogger          = DEBUG, Screen
+
+  log4perl.appender.Logfile          = Log::Log4perl::Appender::File
+  log4perl.appender.Logfile.filename = /tmp/glog.log
+  log4perl.appender.Logfile.layout   = Log::Log4perl::Layout::PatternLayout
+  log4perl.appender.Logfile.layout.ConversionPattern = [%r] %F %L %m%n
+
+  log4perl.appender.Screen         = Log::Log4perl::Appender::Screen
+  log4perl.appender.Screen.stderr  = 0
+  log4perl.appender.Screen.layout = Log::Log4perl::Layout::SimpleLayout
+);
+
+# ... passed as a reference to init()
+Log::Log4perl::init( \$conf );
+
+my ($output_path,$unbuffered,$compress);
+$compress = 1; # Compress by default
+
+GetOptions( "output_path=s" => \$output_path,
+            "unbuffered"    => \$unbuffered,
+            "compress=i"    => \$compress,
+        ) or Usage();
+
+my $glog = Util::glog->new( output_path => "$output_path",
+                            unbuffered  => $unbuffered,
+                            compress    => $compress,
+                          );
+
+sub Usage
+{
+  print STDOUT <<EOF;
+Usage: $0 [-f] [-u] [-h #] -o </my/log/file>
+  where:
+   -f force historical logging regardless of mountpoint
+   -h number of days old to keep historical log files (7 days)
+   -o full path and name of output file
+   -u line buffer output to file (default is fully buffered)
+EOF
+  exit(1);
+}
 
 $glog->process_stdin();
+
