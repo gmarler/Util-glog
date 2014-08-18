@@ -176,7 +176,10 @@ sub process_stdin {
       }
 
       # Rotate Log in parent process
-      $self->rotate_log(); 
+      $self->rotate_log();
+
+      # Now that we have a new filehandle open, refresh the cached copy we have
+      $log_fh = $self->logfile_fh();
 
       # Set up the next expiration of the rotation timer
       $l->info("Expiration refreshed to " . $self->_expiration . " seconds");
