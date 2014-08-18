@@ -349,13 +349,7 @@ sub _refresh_expiration {
    
   $self->_expiration($secs_till_midnight);
 
-  # Since we might have a bit of clock drift, make sure we return any seconds
-  # till midnight if they're greater than 0 and < 60
-  if ($secs_till_midnight < 60) {
-    return $secs_till_midnight;
-  } else {
-    return 0;
-  }
+  return $secs_till_midnight;
 }
 
 =head2 _worker_pid
