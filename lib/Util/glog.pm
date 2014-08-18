@@ -207,15 +207,12 @@ sub process_stdin {
   # If we fell out of the loop above, we now need to:
   # 1. Close the pipe from the incoming data flow
   $stdin_fh->close();
-  # 2. Flush everything to the worker process, send a termination signal
-  #    to it, and read the last from it.
-  #    Make sure to kill it off and reap its exit value
+  # 2. Shutdown writing to worker process by sending EOF.
+  #    Then read the last from the worker process.
+  #    It will exit, so make sure to also reap its exit value
   # TODO: Make sure it's still alive first, if not, don't bother with this
   my ($final_cbuf);
-  $Parent->flush();
-  if ($self->_worker_pid()) {
-    kill 'TERM', $self->_worker_pid();
-  }
+  shutdown($Parent,1);
   while ($Parent->read($final_cbuf,1024)) {
     $log_fh->print($final_cbuf);
   }
@@ -227,6 +224,8 @@ sub process_stdin {
   } else {
     $l->warn("waitpid on Worker PID returned $wp_pid");
   }
+  # Do the final close on the Unix Domain Socket
+  $Parent->close();
   # 3. Flush and close the final log file
   $log_fh->flush();
   $log_fh->close();
@@ -371,12 +370,6 @@ sub _worker_pid_task {
 
   while (my $byte_count = $Worker->read($buf,1024)) {
     $zh->print($buf);
-    if ($self->received_signal()) {
-      $l->debug("WORKER PID received TERM signal");
-      $Worker->autoflush(1);
-      $zh->autoflush(1);
-      last;
-    }
   }
   # If we get here, we've been terminated
   $zh->flush();
