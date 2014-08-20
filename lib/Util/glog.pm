@@ -107,7 +107,6 @@ sub set_logfile {
     $suffix = "-${ts}";
   }
   $fname = File::Spec->catfile($self->logdir,$self->logfile_base . ${suffix});
-  #$log->debug("Going to set logfile attribute to: $fname");
 
   $self->logfile($fname);
 
@@ -116,14 +115,14 @@ sub set_logfile {
 
   $self->logfile_fh($fh);
 
-  # NOTE: Moved into forked worker PID
-  # if ($self->compress) {
-  #   my $zh = IO::Compress::Bzip2->new($fh, Append => 1, AutoClose => 1,
-  #                                          BlockSize100K => 9, );
-  #   $self->logfile_fh($zh);
-  # } else {
-  #   $self->logfile_fh($fh);
-  # }
+  # NOTE: Move into forked worker PID when we go back to that model
+  if ($self->compress) {
+    my $zh = IO::Compress::Bzip2->new($fh, Append => 1, AutoClose => 1,
+                                           BlockSize100K => 9, );
+    $self->logfile_fh($zh);
+  } else {
+    $self->logfile_fh($fh);
+  }
 }
 
 sub generic_ts {
@@ -145,12 +144,12 @@ sub process_stdin {
   }
   my $log_fh = $self->logfile_fh();
 
-  $self->_setup_worker_pid();
+  # $self->_setup_worker_pid();
 
-  my $Parent   = $self->_Parent();
+  # my $Parent   = $self->_Parent();
 
   # Set reading from Worker to be non-blocking
-  $Parent->blocking( 0 ) or croak("Unable to set non-blocking");
+  # $Parent->blocking( 0 ) or croak("Unable to set non-blocking");
 
   # One shot timer till the first rotation
   $l->debug("Setting timer to rotate log for " . $self->_expiration .
@@ -160,22 +159,37 @@ sub process_stdin {
 
   # Start the logging...
   while (my $line = $stdin_fh->getline()) {
-    my $cbuf;                   # Compressed buffer read from worker
-    my $bytes_before_compress;  # Bytes before compression
-    my $bytes_after_compress;   # Bytes after  compression
-    $Parent->print("$line");    # Into Worker
+    #my $cbuf;                   # Compressed buffer read from worker
+    #my $bytes_before_compress;  # Bytes before compression
+    #my $bytes_after_compress;   # Bytes after  compression
+    #$Parent->print("$line");    # Into Worker
 
     # If Worker ready to send back, then receive and write to actual file
-    if ($bytes_after_compress = $Parent->read($cbuf,80)) {
-      $log_fh->print($cbuf);
-    }
+    #if ($bytes_after_compress = $Parent->read($cbuf,80)) {
+    #  $log_fh->print($cbuf);
+    #}
+    $log_fh->print($line);
 
     # Handle signal indicating to rotate log files when received
     if ($self->received_rotate) {
+
       $self->received_rotate(0);
+
       # Sometimes, there is clock drift in the timer - we may need to wait a few
       # secs (+1 to be safe) before the actual rotation
-      my $secs_to_delay = $self->_refresh_expiration();
+      my $secs_till_midnight = $self->_refresh_expiration();
+      my $secs_to_delay;
+
+      # Since we might have a bit of clock drift, we might have crossed
+      # over into the next day, and thus we're getting the number of seconds until
+      # the *NEXT* midnight.
+      # So, if $secs_till_midnight is > 30, then we need to say that there are
+      # 0 seconds left, so we don't wait on the midnight that has just passed
+      if ($secs_till_midnight > 30) {
+        $secs_to_delay = 0;
+      } else {
+        $secs_to_delay = $secs_till_midnight;
+      }
 
       $l->info("Rotating Log");
 
@@ -199,7 +213,7 @@ sub process_stdin {
     if ($self->received_signal) {
       $l->info("Received a termination signal of some kind");
       $self->received_signal(0);
-      $Parent->autoflush(1);
+      # $Parent->autoflush(1);
       last;
     }
   }
@@ -211,21 +225,21 @@ sub process_stdin {
   #    Then read the last from the worker process.
   #    It will exit, so make sure to also reap its exit value
   # TODO: Make sure it's still alive first, if not, don't bother with this
-  my ($final_cbuf);
-  shutdown($Parent,1);
-  while ($Parent->read($final_cbuf,1024)) {
-    $log_fh->print($final_cbuf);
-  }
-  $l->debug("Waiting for WORKER PID to finish");
-  my $wp_pid = waitpid($self->_worker_pid(), 0);
-  if ($wp_pid == $self->_worker_pid()) {
-    $l->debug("Worker PID $wp_pid exited with status: " . $?);
-    $self->_worker_pid(0);  # For the benefit of DEMOLISH()
-  } else {
-    $l->warn("waitpid on Worker PID returned $wp_pid");
-  }
-  # Do the final close on the Unix Domain Socket
-  $Parent->close();
+  ### my ($final_cbuf);
+  ### shutdown($Parent,1);
+  ### while ($Parent->read($final_cbuf,1024)) {
+  ###   $log_fh->print($final_cbuf);
+  ### }
+  ### $l->debug("Waiting for WORKER PID to finish");
+  ### my $wp_pid = waitpid($self->_worker_pid(), 0);
+  ### if ($wp_pid == $self->_worker_pid()) {
+  ###   $l->debug("Worker PID $wp_pid exited with status: " . $?);
+  ###   $self->_worker_pid(0);  # For the benefit of DEMOLISH()
+  ### } else {
+  ###   $l->warn("waitpid on Worker PID returned $wp_pid");
+  ### }
+  ### # Do the final close on the Unix Domain Socket
+  ### $Parent->close();
   # 3. Flush and close the final log file
   $log_fh->flush();
   $log_fh->close();
@@ -347,17 +361,6 @@ sub _refresh_expiration {
   $l->debug("NORMALIZED TIME till midnight: $time_till_midnight");
 
   $self->_expiration($secs_till_midnight);
-
-  # Since we might have a bit of clock drift, we might have crossed
-  # over into the next day, and thus we're getting the number of seconds until
-  # the *NEXT* midnight.
-  # So, if $secs_till_midnight is > 0, then we need to say that there are
-  # 0 seconds left, so we don't wait on the midnight that has just passed
-  if ($secs_till_midnight > 30) {
-    return 0;
-  } else {
-    return $secs_till_midnight;
-  }
 
   return $secs_till_midnight;
 }
