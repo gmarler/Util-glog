@@ -185,6 +185,9 @@ sub process_stdin {
       # the *NEXT* midnight.
       # So, if $secs_till_midnight is > 30, then we need to say that there are
       # 0 seconds left, so we don't wait on the midnight that has just passed
+      # to arrive
+      # Otherwise, we need to wait for midnight to arrive, which should only
+      # be a few seconds
       if ($secs_till_midnight > 30) {
         $secs_to_delay = 0;
       } else {
@@ -193,7 +196,7 @@ sub process_stdin {
 
       $l->info("Rotating Log");
 
-      # Wait $secs_to_delay, then rotate the log
+      # Wait $secs_to_delay, then rotate the log (and re-refresh the expiration)
       if ($secs_to_delay) {
         $l->debug("Sleeping $secs_to_delay before log rotation, due to timer drift");
         sleep($secs_to_delay);
@@ -204,6 +207,10 @@ sub process_stdin {
 
       # Now that we have a new filehandle open, refresh the cached copy we have
       $log_fh = $self->logfile_fh();
+
+      # Re-refresh the expiration time, just to make sure we're timing to the
+      # *next* midnight
+      $secs_till_midnight = $self->_refresh_expiration();
 
       # Set up the next expiration of the rotation timer
       $l->info("Expiration refreshed to " . $self->_expiration . " seconds");
