@@ -297,9 +297,15 @@ sub rotate_log {
   @logfiles_to_delete = map { $_ = File::Spec->catfile($self->logdir, $_); }
                          @logfiles_to_delete;
   #$log->debug("Absolute Logfiles to delete:\n" . join "\n", @logfiles_to_delete);
+  if (@logfiles_to_delete) {
+    $log->debug("LOG ROTATION: No logfiles to delete");
+  } else {
+    $log->debug("LOG ROTATION: " . scalar(@logfiles_to_delete) .
+                " logfiles to delete");
+  }
   foreach my $file (@logfiles_to_delete) {
     if ( -e $file ) {
-      unlink($file) or $log->logdie("Unable to remove $file");
+      unlink($file) or $log->error("Unable to remove $file: $!");
     } else {
       $log->error( "$file doesn't seem to exist, so can't remove it" );
     }
