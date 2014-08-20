@@ -348,6 +348,17 @@ sub _refresh_expiration {
 
   $self->_expiration($secs_till_midnight);
 
+  # Since we might have a bit of clock drift, we might have crossed
+  # over into the next day, and thus we're getting the number of seconds until
+  # the *NEXT* midnight.
+  # So, if $secs_till_midnight is > 0, then we need to say that there are
+  # 0 seconds left, so we don't wait on the midnight that has just passed
+  if ($secs_till_midnight > 30) {
+    return 0;
+  } else {
+    return $secs_till_midnight;
+  }
+
   return $secs_till_midnight;
 }
 
