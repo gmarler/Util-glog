@@ -113,8 +113,6 @@ sub set_logfile {
   $fh = IO::File->new("$fname",">>") or
     $log->logdie("Unable to open $fname");
 
-  $self->logfile_fh($fh);
-
   # NOTE: Move into forked worker PID when we go back to that model
   if ($self->compress) {
     my $zh = IO::Compress::Bzip2->new($fh, Append => 1, AutoClose => 1,
