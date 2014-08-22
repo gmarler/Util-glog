@@ -214,7 +214,9 @@ sub process_stdin {
 
       # Set up the next expiration of the rotation timer
       $l->info("Expiration refreshed to " . $self->_expiration . " seconds");
-      POSIX::RT::Timer->new( value => $self->_expiration, interval => 0, signal => SIGRTMIN   );
+      # TODO: $t must be in scope or the Timer won't fire???
+      $t = POSIX::RT::Timer->new( value => $self->_expiration,
+                                  interval => 0, signal => SIGRTMIN );
     }
     # Handle signal indicating termination is needed
     if ($self->received_signal) {
