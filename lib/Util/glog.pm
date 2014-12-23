@@ -1,8 +1,11 @@
-package Util::glog;
-
 use strict;
 use warnings;
 
+package Util::glog;
+
+# ABSTRACT: Generic logging utility
+# VERSION
+#
 use Moose;
 use Moose::Util::TypeConstraints;
 with 'MooseX::Log::Log4perl';
@@ -56,6 +59,15 @@ has _worker_pid     => ( is => 'rw', isa => 'Num' );
 has _Parent         => ( is => 'rw', isa => 'IO::Handle' );
 has _Worker         => ( is => 'rw', isa => 'IO::Handle' );
 
+# Statistics
+has _bytes_in       => ( is => 'rw', isa => 'Num', default => 0, );
+has _bytes_comp     => ( is => 'rw', isa => 'Num', default => 0, );
+
+=for Pod::Coverage AF_UNIX BUILD DEMOLISH PF_UNSPEC
+
+=head2 METHODS
+
+=cut
 
 sub BUILD {
   my ($self) = shift;
@@ -80,6 +92,14 @@ sub _build_logfile_base {
   my $basename    = File::Basename::basename($output_path);
 }
 
+=head2 set_logfile
+
+This method determines the file log name, depending on whether things like
+compression are enabled, stores that attribute, and also opens the logfile
+filehandle and squirrels that away as well.
+
+=cut
+
 # We don't use a builder for the logfile attribute because it can change at any
 # time.  We do however need a method to do the building because we always need
 # to append a datestamp to it before it gets created.
@@ -99,7 +119,7 @@ sub set_logfile {
 
   # Get the timestamp to append to the name, make sure it's in the current TZ
   # for the host this is running on.
-  $ts = $self->generic_ts();
+  $ts = $self->_generic_ts();
 
   if ($self->compress) {
     $suffix = "-${ts}.bz2";
@@ -110,7 +130,7 @@ sub set_logfile {
 
   $self->logfile($fname);
 
-  $fh = IO::File->new("$fname",">>") or
+  $fh = IO::File->new("$fname",">>") or 
     $log->logdie("Unable to open $fname");
 
   # NOTE: Move into forked worker PID when we go back to that model
@@ -123,12 +143,20 @@ sub set_logfile {
   }
 }
 
-sub generic_ts {
+sub _generic_ts {
   my ($self) = @_;
 
   my (@ts) = localtime(time);
   return sprintf("%4d%02d%02d",$ts[5]+1900,$ts[4]+1,$ts[3]);
 }
+
+=head2 process_stdin
+
+Once called, this method will read STDIN and log it to a file as specified by
+the object's configuration.  Several situation will cause execution to fall out
+of this method, and they all end up closing the log file.
+
+=cut
 
 sub process_stdin {
   my ($self) = @_;
@@ -145,27 +173,23 @@ sub process_stdin {
   # $self->_setup_worker_pid();
 
   # my $Parent   = $self->_Parent();
-
   # Set reading from Worker to be non-blocking
-  # $Parent->blocking( 0 ) or croak("Unable to set non-blocking");
+  # $Parent->blocking( 0 ) or carp("Unable to set non-blocking");
 
   # One shot timer till the first rotation
   $l->debug("Setting timer to rotate log for " . $self->_expiration .
             " seconds from now");
   my $t = POSIX::RT::Timer->new( value => $self->_expiration,
-                                 interval => 0, signal => SIGRTMIN );
+                                 interval => 0, signal => SIGRTMIN   );
 
   # Start the logging...
   while (my $line = $stdin_fh->getline()) {
     #my $cbuf;                   # Compressed buffer read from worker
-    #my $bytes_before_compress;  # Bytes before compression
+    #my $bytes_before_compress =
+    #   length($line);           # Bytes before compression
     #my $bytes_after_compress;   # Bytes after  compression
     #$Parent->print("$line");    # Into Worker
 
-    # If Worker ready to send back, then receive and write to actual file
-    #if ($bytes_after_compress = $Parent->read($cbuf,80)) {
-    #  $log_fh->print($cbuf);
-    #}
     $log_fh->print($line);
 
     # Handle signal indicating to rotate log files when received
@@ -175,7 +199,7 @@ sub process_stdin {
 
       # Sometimes, there is clock drift in the timer - we may need to wait a few
       # secs (+1 to be safe) before the actual rotation
-      my $secs_till_midnight = $self->_refresh_expiration();
+      my $secs_till_midnight = $self->_refresh_expiration() + 1;
       my $secs_to_delay;
 
       # Since we might have a bit of clock drift, we might have crossed
@@ -214,12 +238,28 @@ sub process_stdin {
       $l->info("Expiration refreshed to " . $self->_expiration . " seconds");
       # TODO: $t must be in scope or the Timer won't fire???
       $t = POSIX::RT::Timer->new( value => $self->_expiration,
-                                  interval => 0, signal => SIGRTMIN );
+                                  interval => 0, signal => SIGRTMIN   );
     }
     # Handle signal indicating termination is needed
     if ($self->received_signal) {
       $l->info("Received a termination signal of some kind");
       $self->received_signal(0);
+
+###      # Send Termination signal to child
+###      my $child_pid = $self->_worker_pid();
+###      $l->debug("Sending 'TERM' signal to child $child_pid");
+###      kill 'TERM', $child_pid;
+###      while ($bytes_after_compress = $Parent->read($cbuf,1024)) {
+###        $self->_bytes_comp( $self->_bytes_comp() + $bytes_after_compress );
+###        $log_fh->print($cbuf);
+###      }
+###      # Wait for child
+###      $l->debug("Waiting for child");
+###      my $kid = waitpid($child_pid, 0);
+###      if ($kid == $child_pid) {
+###        $l->debug("Wait for child SUCCESSFUL");
+###        $self->_worker_pid(0);
+###      }
       # $Parent->autoflush(1);
       last;
     }
@@ -233,7 +273,9 @@ sub process_stdin {
   #    It will exit, so make sure to also reap its exit value
   # TODO: Make sure it's still alive first, if not, don't bother with this
   ### my ($final_cbuf);
-  ### shutdown($Parent,1);
+  ### shutdown($Parent,1);  # No more writing
+  ### # Set reading from Worker back to blocking
+  ### $Parent->blocking( 1 ) or carp("Unable to set back to blocking");
   ### while ($Parent->read($final_cbuf,1024)) {
   ###   $log_fh->print($final_cbuf);
   ### }
@@ -246,11 +288,19 @@ sub process_stdin {
   ###   $l->warn("waitpid on Worker PID returned $wp_pid");
   ### }
   ### # Do the final close on the Unix Domain Socket
+  ### shutdown($Parent,0);  # No more reading
   ### $Parent->close();
   # 3. Flush and close the final log file
   $log_fh->flush();
   $log_fh->close();
 }
+
+=head2 rotate_log
+
+Method which rotates the log file, and also expires/deletes log files that are
+too high in count.
+
+=cut
 
 sub rotate_log {
   my ($self) = @_;
@@ -287,21 +337,22 @@ sub rotate_log {
   @found_logfiles = grep { $_ =~ $lf_re; } @all_logfiles;
   #$log->debug(join "\n", @found_logfiles);
 
-  @logfiles_to_delete = sort { (my $adate = $a) =~ m/-(\d{8})(?:\.bz2)?/;
-                               (my $bdate = $b) =~ m/-(\d{8})(?:\.bz2)?/;
+  @logfiles_to_delete = sort { (my $adate = $a) =~ m/-(\d{8}+)(?:\.bz2)?/;
+                               (my $bdate = $b) =~ m/-(\d{8}+)(?:\.bz2)?/;
                                $bdate cmp $adate; } @found_logfiles;
   #$log->debug("Sorted before logfiles to delete:\n" . join "\n", @logfiles_to_delete);
   @logfiles_to_retain = splice @logfiles_to_delete, 0, $self->max;
   #$log->debug("Logfiles to keep\n" . join "\n", @logfiles_to_retain);
   #$log->debug("Logfiles to delete:\n" . join "\n", @logfiles_to_delete);
-  @logfiles_to_delete = map { $_ = File::Spec->catfile($self->logdir, $_); }
+  @logfiles_to_delete = map { my $abs_logfile = File::Spec->catfile($self->logdir, $_);
+                                 $abs_logfile; }
                          @logfiles_to_delete;
   #$log->debug("Absolute Logfiles to delete:\n" . join "\n", @logfiles_to_delete);
   if (@logfiles_to_delete) {
-    $log->debug("LOG ROTATION: No logfiles to delete");
-  } else {
     $log->debug("LOG ROTATION: " . scalar(@logfiles_to_delete) .
                 " logfiles to delete");
+  } else {
+    $log->debug("LOG ROTATION: No logfiles to delete");
   }
   foreach my $file (@logfiles_to_delete) {
     if ( -e $file ) {
@@ -326,6 +377,18 @@ sub _setup_signal_handlers {
       $SIG{$sig} = sub {  my $sig = shift; print "Received $sig\n";
                           $self->received_signal(1); };
     }
+    $SIG{'USR1'} = sub {
+      my $sig = shift; print "Received $sig\n";
+      my $pct_reduced = (1.0 - ( $self->_bytes_comp() / $self->_bytes_in() )
+                        ) * 100.0;
+      my $stats = sprintf("STATISTICS\n" . "=" x 36 .
+                          "\nBYTES RECEIVED: %20d\n" .
+                          "COMPRESSED TO:  %20d\n" . 
+                          "PERCENT REDUCED:              %6.2f\n",
+                          $self->_bytes_in(), $self->_bytes_comp(),
+                          $pct_reduced);
+      print $stats;
+    };
   }
 }
 
@@ -378,7 +441,7 @@ sub _refresh_expiration {
   return $secs_till_midnight;
 }
 
-=head2 _worker_pid
+=head2 _worker_pid_task
 
 =cut
 
@@ -390,21 +453,28 @@ sub _worker_pid_task {
   $l->debug("Worker child PID started");
   my $Worker = $self->_Worker();
 
-  # TODO: Read socket for data from parent, and filter through
-  #       IO::Compress::Bzip2
-  #my $zh = IO::Compress::Bzip2->new($Worker, BlockSize100K => 9, );
-  my $zh = IO::Compress::Bzip2->new($Worker, );
+  # TODO: Treat EOF at the end of a day (log rotation event) differently than
+  #       the termination of the parent and this child
+
+  # Read socket for data from parent, and filter through
+  # IO::Compress::Bzip2
+  my $zh = IO::Compress::Bzip2->new($Worker, BlockSize100K => 9, );
 
   while (my $byte_count = $Worker->read($buf,1024)) {
+    if ($Worker->eof()) {
+      $l->debug("WORKER sees EOF");
+    }
     $zh->print($buf);
   }
   # If we get here, we've been terminated
   $zh->flush();
   $zh->close();
   $Worker->flush();
-  $Worker->close();
+  #$Worker->close();
+  shutdown($Worker, 1); # No more writing
   exit(0);
 }
+
 
 sub _setup_worker_pid {
   my ($self) = @_;
@@ -437,6 +507,10 @@ sub _setup_worker_pid {
         $SIG{$sig} = sub {  my $sig = shift; print "WORKER PID Received $sig\n";
                             $self->received_signal(1); };
       }
+      for my $sig (qw(HUP PIPE INT)) {
+        $SIG{$sig} = sub {  my $sig = shift; print "WORKER PID Received $sig\n";
+                            exit(0); };
+      }
     };
     $Parent->close();
     $self->_worker_pid_task();
@@ -450,13 +524,14 @@ sub _setup_worker_pid {
 
 sub DEMOLISH {
   my $self = shift;
-  my ($l)    = $self->logger;
 
   my ($worker_pid) = $self->_worker_pid();
 
   # Only do this for the parent PID
   if ($worker_pid) {
-    $l->warn("DEMOLISH: Worker PID is still running");
+    #my ($l)  = $self->logger;
+    #$l->warn("DEMOLISH: Worker PID is still running");
+    carp("DEMOLISH: Worker PID is still running");
   }
 }
 

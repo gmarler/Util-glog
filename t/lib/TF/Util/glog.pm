@@ -47,10 +47,10 @@ sub test_startup {
   # 'truthy' value
   #if ( exists($ENV{'LIVE_TEST_DATA'}) and $ENV{'LIVE_TEST_DATA'} ) {
   #  # TODO: Only proceed if we're running on Solaris 11 or later
-  #  note "LIVE_TEST_DATA is set: testing with live data";
+  #  diag "LIVE_TEST_DATA is set: testing with live data";
   #} else {
-  #  note "Testing with canned data";
-  #  note "If you want to test with live data, set envvar LIVE_TEST_DATA=1";
+  #  diag "Testing with canned data";
+  #  diag "If you want to test with live data, set envvar LIVE_TEST_DATA=1";
   #}
   #$test->test_glog( $test->class_name->new() );
 }
@@ -120,9 +120,8 @@ sub test_logfile_base {
   isa_ok($glog, $test->class_name());
 
   # Make sure the logfile_base attribute came out as expected
-  cmp_ok($glog->logfile_base, 'eq',
-         File::Basename::basename($output_path),
-         'logfile_base attribute set as expected');
+  cmp_ok($glog->logfile_base, 'eq', File::Basename::basename($output_path), 'logfile_base attribute set as expected');
+  $glog->DESTROY();
 }
 
 sub test_logfile_creation {
@@ -148,18 +147,19 @@ sub test_logfile_creation {
   cmp_ok($glog->logfile, 'eq', $fname_expected, 'logfile attribute set as expected');
   # Make sure the logfile_fh attribute has been set
   isa_ok($glog->logfile_fh, 'IO::File');
+  $glog->DESTROY();
 }
 
-sub test_logfile_rotation_nocompress {
-  my ($test) = shift;
-  my $dh = $test->{temp_dir};
-  my ($fname_base) = "test.out";
-  my (@expected_logfiles, @actual_logfiles);
-  my ($tempdir_dh);
-
-  isa_ok($dh,'File::Temp::Dir');
-  my ($output_path) = File::Spec->catfile($dh->dirname, $fname_base);
-}
+# sub test_logfile_rotation_nocompress {
+#   my ($test) = shift;
+#   my $dh = $test->{temp_dir};
+#   my ($fname_base) = "test.out";
+#   my (@expected_logfiles, @actual_logfiles);
+#   my ($tempdir_dh);
+# 
+#   isa_ok($dh,'File::Temp::Dir');
+#   my ($output_path) = File::Spec->catfile($dh->dirname, $fname_base);
+# }
 
 sub test_logfile_rotation {
   my ($test) = shift;
@@ -283,16 +283,16 @@ sub test_process_stdin {
     }
     # TODO: Do we need to make process_stdin() return something meaningful?
     my $retval = $glog->process_stdin();
-    note "Return value from process_stdin() is: $retval";
+    diag "Return value from process_stdin() is: $retval";
   }
 
   # Wait on child PID to finish
   my $kid = waitpid($pid, 0);
-  cmp_ok($kid, '==', $pid, "Waited on Child PID successful");
+  cmp_ok($kid, '==', $pid, "Waited on Child PID successfully");
 
   restore_time();
 }
-#
+
 #sub test_signals {
 #  my ($test) = shift;
 #  my $dh = $test->{temp_dir};
@@ -326,27 +326,27 @@ sub test_process_stdin {
 #  #sleep 5;
 #  restore_time();
 #}
-
-sub test_refresh_expiration {
-  my ($test) = shift;
-  my $dh = $test->{temp_dir};
-  my ($fname_base) = "refresh.out";
-
-  my ($output_path) = File::Spec->catfile($dh->dirname, $fname_base);
-
-  set_absolute_time( "07/15/2014 00:00:00 -0400", "%m/%d/%Y %H:%M:%S %z" );
-
-  # Create the glog object
-  my $glog = Util::glog->new( output_path => $output_path,);
-  isa_ok($glog, $test->class_name());
-
-  $glog->_refresh_expiration();
-  cmp_ok($glog->_expiration, '<=', 24*60*60, "Expiration <= a day");
-  cmp_ok($glog->_expiration,  '>', 24*60*60 - 50, "Expiration > day - 10 secs");
-
-  restore_time();
-}
-
+#
+#sub test_refresh_expiration {
+#  my ($test) = shift;
+#  my $dh = $test->{temp_dir};
+#  my ($fname_base) = "refresh.out";
+#
+#  my ($output_path) = File::Spec->catfile($dh->dirname, $fname_base);
+#
+#  set_absolute_time( "07/15/2014 00:00:00 -0400", "%m/%d/%Y %H:%M:%S %z" );
+#
+#  # Create the glog object
+#  my $glog = Util::glog->new( output_path => $output_path,);
+#  isa_ok($glog, $test->class_name());
+#
+#  $glog->_refresh_expiration();
+#  cmp_ok($glog->_expiration, '<=', 24*60*60, "Expiration <= a day");
+#  cmp_ok($glog->_expiration,  '>', 24*60*60 - 50, "Expiration > day - 10 secs");
+#
+#  restore_time();
+#}
+#
 #sub test_inline_compress {
 #  my ($test) = shift;
 #  my $dh = $test->{temp_dir};
