@@ -10,4 +10,3 @@ my $test_suite = Test::Class::Moose->new(
 $test_suite->runtests;
 
 my $report = $test_suite->test_report;
-

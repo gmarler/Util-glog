@@ -61,6 +61,3 @@ EOF
 }
 
 $glog->process_stdin();
-
-
-
