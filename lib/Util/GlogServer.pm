@@ -42,8 +42,10 @@ sub run {
       socktype  => "stream",
       path      => $sockpath,
     },
+
     on_stream => sub {
       my ( $stream ) = @_;
+
       $stream->configure(
         on_read => sub {
           my ( $self, $buffref, $eof ) = @_;
@@ -51,7 +53,11 @@ sub run {
           return 0;
         }
       );
+
+      # Start watching the stream we've just configured
+      $loop->add( $stream );
     },
+
     on_listen_error => sub {
       print STDERR "Cannot listen\n";
     },
