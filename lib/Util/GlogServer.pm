@@ -50,6 +50,7 @@ sub run {
         on_read => sub {
           my ( $self, $buffref, $eof ) = @_;
           say "Received $$buffref";
+          $$buffref = "";
           return 0;
         }
       );
