@@ -10,6 +10,8 @@ use IO::Async::Loop;
 use namespace::autoclean;
 
 
+has 'sockpath'    => ( is => 'rw', isa => 'Str',
+                       default => "/tmp/glogserver2.sock" );
 has '_loop'       => (is => 'rw', isa => 'IO::Async::Loop',
                       lazy => 1, builder => '_build_loop',
                      );
@@ -23,7 +25,7 @@ sub _build_loop {
 
 sub run {
   my $self = shift;
-  my $sockpath = "/tmp/glogserver2.sock";
+  my $sockpath = $self->sockpath;
 
   my $loop = $self->_loop();
 
@@ -49,7 +51,6 @@ sub run {
   );
 
   $loop->run;
-  unlink $sockpath;
 }
 
 1;
