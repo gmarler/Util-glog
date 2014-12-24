@@ -1,0 +1,10 @@
+#!/usr/perl5/5.18.1/bin/perl
+
+use feature ':5.18';
+use feature qw(say);
+
+use Util::GlogServer;
+
+my $app = Util::GlogServer->new_with_options();
+
+$app->run();
