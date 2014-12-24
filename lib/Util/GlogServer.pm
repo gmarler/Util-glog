@@ -28,6 +28,13 @@ sub run {
   my $sockpath = $self->sockpath;
 
   my $loop = $self->_loop();
+  my $id = $loop->attach_signal(
+            'INT',
+            sub {
+              say "Received SIGINT";
+              $self->_loop->stop;
+              unlink $sockpath;
+            });
 
   $loop->listen(
     addr => {
