@@ -61,6 +61,7 @@ sub run {
 
     on_listen_error => sub {
       print STDERR "Cannot listen\n";
+      exit(1);
     },
   );
 

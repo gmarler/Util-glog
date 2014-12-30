@@ -47,6 +47,18 @@ sub test {
 
   my $loop = $self->_loop();
 
+  my $process = IO::Async::Process->new(
+    command => [ $self->command() ],
+    stdout => {
+      on_read => sub {
+      },
+    },
+    stderr => {
+      on_read => sub {
+      },
+    },
+  );
+
   $loop->connect(
     addr => {
       family    => "unix",
@@ -57,11 +69,15 @@ sub test {
       my ($handle) = shift;
       say "CONNECTED!";
       $handle->write("My TEST Message!\n");
+      return 1;
     },
     on_connect_error => sub {
-      print STDERR "Cannot connect\n";
+      print STDERR "Cannot connect - is the glog2-server down?\n";
+      exit(1);
     }
   );
+
+  $loop->add( $process );
 
   $loop->run;
 }
