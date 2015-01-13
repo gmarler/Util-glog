@@ -6,6 +6,7 @@ use feature qw(say);
 use Moose;
 with 'MooseX::Getopt';
 use IO::Async::Loop;
+use IO::Async::Process;
 
 use namespace::autoclean;
 
@@ -49,14 +50,12 @@ sub test {
 
   my $process = IO::Async::Process->new(
     command => [ $self->command() ],
-    stdout => {
-      on_read => sub {
-      },
-    },
-    stderr => {
-      on_read => sub {
-      },
-    },
+    stdout => { via => 'pipe_read' },
+    stderr => { via => 'pipe_read' },
+    on_finish => sub { print "The child process has finished\n";
+                       $loop->stop;
+                       exit(0);
+                     },
   );
 
   $loop->connect(
@@ -75,6 +74,28 @@ sub test {
       print STDERR "Cannot connect - is the glog2-server down?\n";
       exit(1);
     }
+  );
+
+  $process->stdout->configure(
+    on_read => sub {
+      my ( $stream, $buffref ) = @_;
+      while ( $$buffref =~ s/^(.*)\n// ) {
+        print "the process wrote a line: $1\n";
+      }
+
+      return 0;
+    },
+  );
+
+  $process->stderr->configure(
+    on_read => sub {
+      my ( $stream, $buffref ) = @_;
+      while ( $$buffref =~ s/^(.*)\n// ) {
+        print "the process wrote a line: $1\n";
+      }
+
+      return 0;
+    },
   );
 
   $loop->add( $process );
