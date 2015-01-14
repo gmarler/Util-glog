@@ -18,12 +18,17 @@ has 'command'     => (is => 'rw', isa => 'Str', required => 1,
 has 'buffer'      => (is => 'rw', isa => 'Bool', required => 0,
                       default => 1,
                       documentation => 'Buffer log output? (DEFAULT: TRUE)');
-has 'bufsize'     => (is => 'rw', isa => 'Num', required => 0,
-                      default => 65536,
-                      documentation => 'Size of buffer to use to transfer to log server (DEFAULT: 64KB)');
+has 'buffer_size' => (is => 'rw', isa => 'Num', required => 0,
+                      default => 8192,
+                      documentation => 'Size of buffer to use to transfer to log server (DEFAULT: 8KB)');
 has 'compress'    => (is => 'rw', isa => 'Bool', required => 0,
                       default => 1,
-                      documentation => 'Compress log output? (DEFAULT: TRUE)');
+                      documentation => 'Compress log output with bzip2? (DEFAULT: TRUE)');
+# TODO: Ensure the range is 1 - 9, and test for it!
+has 'compress_level' => (is => 'rw', isa => 'Num', required => 0,
+                         default => 9,
+                         documentation => 'Bzip2 compression level? (DEFAULT: 9)');
+
 has '_loop'       => (is => 'rw', isa => 'IO::Async::Loop', lazy => 1,
                       builder => '_build_loop',
                      );
@@ -69,9 +74,29 @@ sub test {
     on_connected => sub {
       my ($handle) = shift;
       say "CONNECTED!";
-      my $logfile = $self->logfile;
+      # TODO:
+      # Client Protocol
+      # LOGFILE:        The logfile we're requesting the server create
+      # BUFFERED:       0 | 1   Whether the log will be buffered or not
+      #                 DEFAULT: 1
+      # BUFFER_SIZE:    <bytes> Buffer size
+      #                 DEFAULT: 8192
+      # COMPRESS:       0 | 1   Whether the log will be bzip2 compressed or not
+      #                 DEFAULT: 1
+      # COMPRESS_LEVEL: 1-9  Level of bzip2 compression
+      #                 DEFAULT: 9
+      my $logfile     = $self->logfile;
+      my $buffered    = $self->bufferred;
+      my $buffer_size = $self->buffer_size;
+      my $compress    = $self->compress;
+      my $compress_level = $self->compress_level;
+
       say "Requesting log file: $logfile";
-      $handle->write("$logfile\n");
+      $handle->write("LOGFILE: $logfile\n");
+      $handle->write("BUFFERED: $buffered\n");
+      $handle->write("BUFFER_SIZE: $buffer_size\n");
+      $handle->write("COMPRESS: $compress\n");
+      $handle->write("COMPRESS_LEVEL: $compress_level\n");
       return 1;
     },
     on_connect_error => sub {

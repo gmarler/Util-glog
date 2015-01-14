@@ -93,10 +93,17 @@ sub run {
             } else {
               if (my $fh = IO::File->new($logfile,">")) {
                 # TODO: Send Acceptance message
-                $logdata->{fh} = $fh;
+
+                # Set up log data for this client
+                $logdata->{fh}           = $fh;
+                $logdata->{lines_read}   = 0;
+                $logdata->{lines_logged} = 0;
+
                 $log_table->{$logfile} = $logdata;
                 $stream_table->{$stream_obj} = $logfile;
+
                 $self->_log_table($log_table);
+
                 say Data::Dumper->Dump([ $log_table ]);
               } else {
                 # TODO: Send reject message and close connection
@@ -110,6 +117,8 @@ sub run {
             say "WEIRD: Got an eof at the beginning of a connection";
           }
 
+          # Ok, we've finished talking to the client, now restore the default
+          # reader routine, so we can start receiving real data!
           return undef;
         }
       );
