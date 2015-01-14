@@ -80,6 +80,8 @@ sub run {
         sub {
           my ($stream_obj, $buffref, $eof) = @_;
 
+          my ($logfile, $buffered, $buffer_size, $compress, $compress_level);
+
           my $stream_table = $self->_stream_table;
 
           while ( $$buffref =~ s/^(?<directive>LOGFILE|
