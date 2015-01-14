@@ -58,6 +58,8 @@ sub test {
                      },
   );
 
+  # Get the Future object for the connection to the server
+  my $server_socket =
   $loop->connect(
     addr => {
       family    => "unix",
@@ -74,13 +76,14 @@ sub test {
       print STDERR "Cannot connect - is the glog2-server down?\n";
       exit(1);
     }
-  );
+  )->get;
 
   $process->stdout->configure(
     on_read => sub {
       my ( $stream, $buffref ) = @_;
       while ( $$buffref =~ s/^(.*)\n// ) {
-        print "the process wrote a line: $1\n";
+        # TODO: Count lines read from STDOUT of child
+        $server_socket->write("$1\n");
       }
 
       return 0;
@@ -91,7 +94,8 @@ sub test {
     on_read => sub {
       my ( $stream, $buffref ) = @_;
       while ( $$buffref =~ s/^(.*)\n// ) {
-        print "the process wrote a line: $1\n";
+        # TODO: Count lines read from STDERR of child
+        $server_socket->write("$1\n");
       }
 
       return 0;
