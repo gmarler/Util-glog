@@ -43,15 +43,53 @@ sub run {
       path      => $sockpath,
     },
 
+    # TODO: on_stream is vaguely deprecated
+    #       Use IO::Async::Listener::on_accept instead
     on_stream => sub {
       my ( $stream ) = @_;
+
+      # PROTOCOL:
+      #
+      # CLIENT: Send desired log pathname
+      # TODO:   And buffer size
+      #         And compression level
+      #
+      # SERVER: Check that log pathname is acceptable, open filehandle to it,
+      #         and store it.
+      #         Send back success and continue, OR
+      #         send back rejection and disconnect
+      #
+      # CLIENT: Start sending data
+      #
+      # SERVER: Redirect data to proper filehandle
+      #
+      $stream->push_on_read(
+        sub {
+          my ($self, $buffref, $eof) = @_;
+
+          if ( $$buffref =~ s/^(.*)\n// ) {
+            say "Client requested log file: $1";
+          }
+
+          if ($eof) {
+            say "WEIRD: Got an eof at the beginning of a connection";
+          }
+
+          return undef;
+        }
+      );
 
       $stream->configure(
         on_read => sub {
           my ( $self, $buffref, $eof ) = @_;
-          say "Received $$buffref";
-          $$buffref = "";
-          return 0;
+
+          if ($eof) {
+            # For the moment, do nothing
+            # TODO: flush the output log and clean up
+          } elsif ( $$buffref =~ s/^(.*)\n// ) {
+            say "$1";
+            return 1;
+          }
         }
       );
 

@@ -69,7 +69,9 @@ sub test {
     on_connected => sub {
       my ($handle) = shift;
       say "CONNECTED!";
-      $handle->write("My TEST Message!\n");
+      my $logfile = $self->logfile;
+      say "Requesting log file: $logfile";
+      $handle->write("$logfile\n");
       return 1;
     },
     on_connect_error => sub {
