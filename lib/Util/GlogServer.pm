@@ -2,6 +2,7 @@ package Util::GlogServer;
 
 use feature ':5.18';
 use feature qw(say);
+use feature qw(switch);
 
 use Moose;
 with 'MooseX::Getopt';
@@ -84,64 +85,65 @@ sub run {
 
           my $stream_table = $self->_stream_table;
 
-          while ( $$buffref =~ s/^(?<directive>LOGFILE|
-                                   BUFFERED|
-                                   BUFFER_SIZE|
-                                   COMPRESS|
-                                   COMPRESS_LEVEL): \s+
-                                   (?<dirval>\S+)\n// )
+          while ( $$buffref =~ s/^(?<directive>
+                                   (?:LOGFILE|
+                                      BUFFERED|
+                                      BUFFER_SIZE|
+                                      COMPRESS|
+                                      COMPRESS_LEVEL
+                                   )
+                                  ): \s+
+                                   (?<dirval>\S+)\n//x )
           {
             given ($+{directive}) {
+              my %client_args = %+;
               when (/^LOGFILE$/) {
-                $logfile = $+{dirval};
+                $logfile = $client_args{dirval};
                 say "Client requested log file: $logfile";
               }
               when (/^BUFFERED$/) {
-                $buffered = $+{dirval};
+                $buffered = $client_args{dirval};
                 say "Client requested buffering: $buffered";
               }
               when (/^BUFFER_SIZE$/) {
-                $buffer_size = $+{dirval};
+                $buffer_size = $client_args{dirval};
                 say "Client requested buffer size: $buffer_size";
               }
               when (/^COMPRESS$/) {
-                $compress = $+{dirval};
+                $compress = $client_args{dirval};
                 say "Client requested bzip2 compression: $compress";
               }
               when (/^COMPRESS_LEVEL$/) {
-                $compress_level = $+{dirval};
+                $compress_level = $client_args{dirval};
                 say "Client requested bzip2 compression level: $compress_level";
               }
             }
+          }
 
-          if ( $$buffref =~ s/^(.*)\n// ) {
-            say "Client requested log file: $1";
-            my $logfile = $1;
-            # Reject if already in list of files we're managing
-            if ( exists( $log_table->{$logfile} ) ) {
-              say "Log file $logfile already being written to!\n";
-              # TODO: Send reject message and close message
-              $stream->close;
+          # Reject if already in list of files we're managing
+          if ( exists( $log_table->{$logfile} ) ) {
+            say "Log file $logfile already being written to!\n";
+            # TODO: Send reject message and close message
+            $stream->close;
+          } else {
+            if (my $fh = IO::File->new($logfile,">")) {
+              # TODO: Send Acceptance message
+
+              # Set up log data for this client
+              $logdata->{fh}           = $fh;
+              $logdata->{lines_read}   = 0;
+              $logdata->{lines_logged} = 0;
+
+              $log_table->{$logfile} = $logdata;
+              $stream_table->{$stream_obj} = $logfile;
+
+              $self->_log_table($log_table);
+
+              say Data::Dumper->Dump([ $log_table ]);
             } else {
-              if (my $fh = IO::File->new($logfile,">")) {
-                # TODO: Send Acceptance message
-
-                # Set up log data for this client
-                $logdata->{fh}           = $fh;
-                $logdata->{lines_read}   = 0;
-                $logdata->{lines_logged} = 0;
-
-                $log_table->{$logfile} = $logdata;
-                $stream_table->{$stream_obj} = $logfile;
-
-                $self->_log_table($log_table);
-
-                say Data::Dumper->Dump([ $log_table ]);
-              } else {
-                # TODO: Send reject message and close connection
-                say "Unable to open file $logfile";
-                $stream->close;
-              }
+              # TODO: Send reject message and close connection
+              say "Unable to open file $logfile";
+              $stream->close;
             }
           }
 
