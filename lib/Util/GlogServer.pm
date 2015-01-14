@@ -120,6 +120,7 @@ sub run {
 
           if ($eof) {
             # TODO: flush the output log and clean up
+            # TODO: Close outgoing filehandle
             say "Cleaning up after: $stream_obj";
             my $stream_table = $self->_stream_table;
             my $log_table    = $self->_log_table;
@@ -144,7 +145,7 @@ sub run {
     },
 
     on_listen_error => sub {
-      print STDERR "Cannot listen\n";
+      print STDERR "Cannot listen - do you need to remove the socket?\n";
       exit(1);
     },
   );
