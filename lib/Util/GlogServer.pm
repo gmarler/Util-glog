@@ -82,6 +82,36 @@ sub run {
 
           my $stream_table = $self->_stream_table;
 
+          while ( $$buffref =~ s/^(?<directive>LOGFILE|
+                                   BUFFERED|
+                                   BUFFER_SIZE|
+                                   COMPRESS|
+                                   COMPRESS_LEVEL): \s+
+                                   (?<dirval>\S+)\n// )
+          {
+            given ($+{directive}) {
+              when (/^LOGFILE$/) {
+                $logfile = $+{dirval};
+                say "Client requested log file: $logfile";
+              }
+              when (/^BUFFERED$/) {
+                $buffered = $+{dirval};
+                say "Client requested buffering: $buffered";
+              }
+              when (/^BUFFER_SIZE$/) {
+                $buffer_size = $+{dirval};
+                say "Client requested buffer size: $buffer_size";
+              }
+              when (/^COMPRESS$/) {
+                $compress = $+{dirval};
+                say "Client requested bzip2 compression: $compress";
+              }
+              when (/^COMPRESS_LEVEL$/) {
+                $compress_level = $+{dirval};
+                say "Client requested bzip2 compression level: $compress_level";
+              }
+            }
+
           if ( $$buffref =~ s/^(.*)\n// ) {
             say "Client requested log file: $1";
             my $logfile = $1;
