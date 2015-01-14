@@ -15,7 +15,7 @@ has 'logfile'     => (is => 'rw', isa => 'Str', required => 1,
                       documentation => 'path to logfile base name');
 has 'command'     => (is => 'rw', isa => 'Str', required => 1,
                       documentation => 'Quoted command, with arguments, to log the STDOUT/STDERR of');
-has 'buffer'      => (is => 'rw', isa => 'Bool', required => 0,
+has 'buffered'    => (is => 'rw', isa => 'Bool', required => 0,
                       default => 1,
                       documentation => 'Buffer log output? (DEFAULT: TRUE)');
 has 'buffer_size' => (is => 'rw', isa => 'Num', required => 0,
@@ -86,7 +86,7 @@ sub test {
       # COMPRESS_LEVEL: 1-9  Level of bzip2 compression
       #                 DEFAULT: 9
       my $logfile     = $self->logfile;
-      my $buffered    = $self->bufferred;
+      my $buffered    = $self->buffered;
       my $buffer_size = $self->buffer_size;
       my $compress    = $self->compress;
       my $compress_level = $self->compress_level;
