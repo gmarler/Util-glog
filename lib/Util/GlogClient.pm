@@ -91,6 +91,10 @@ sub test {
       my $compress    = $self->compress;
       my $compress_level = $self->compress_level;
 
+      if ( not $buffered ) {
+        $handle->autoflush(1);
+      }
+
       say "Requesting log file: $logfile";
       $handle->write("LOGFILE: $logfile\n");
       $handle->write("BUFFERED: $buffered\n");

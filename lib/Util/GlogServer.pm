@@ -135,6 +135,11 @@ sub run {
             if (my $fh = IO::File->new($logfile,">")) {
               # TODO: Send Acceptance message
 
+              if ( not $buffered ) {
+                $log->debug("Disabling buffering");
+                $fh->autoflush(1);
+              }
+
               # Set up log data for this client
               $logdata->{fh}           = $fh;
               $logdata->{lines_read}   = 0;
