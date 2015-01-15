@@ -132,7 +132,7 @@ sub run {
             # TODO: Send reject message and close message
             $stream->close;
           } else {
-            if (my $fh = IO::File->new($logfile,">")) {
+            if (my $fh = IO::File->new($logfile,">>")) {
               # TODO: Send Acceptance message
 
               if ( not $buffered ) {
