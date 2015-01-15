@@ -6,6 +6,7 @@ use feature qw(switch);
 
 use Moose;
 with 'MooseX::Getopt';
+with 'MooseX::Log::Log4perl';
 use IO::Async::Loop;
 use IO::File;
 use Data::Dumper;
@@ -27,6 +28,10 @@ has '_log_table'    => (is => 'rw', isa => 'HashRef',
 has '_stream_table' => (is => 'rw', isa => 'HashRef',
                         default => sub { return {}; },
                        );
+
+has '_server_logfile' => (is => 'ro', isa => 'Str',
+                          default => '/tmp/glogserver2.log',
+                         );
 
 sub _build_loop {
   my $self = shift;

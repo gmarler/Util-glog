@@ -2,6 +2,23 @@
 
 use feature ':5.18';
 use feature qw(say);
+use Log::Log4perl;
+
+BEGIN {
+my $conf = q(
+  log4perl.rootLogger                    = DEBUG, Logfile, Screen
+
+  log4perl.appender.Logfile              = Log::Log4perl::Appender::File
+  log4perl.appender.Logfile.filename     = /tmp/glogserver2.log
+  log4perl.appender.Logfile.layout       = Log::Log4perl::Layout::PatternLayout
+  log4perl.appender.Logfile.layout.ConversionPattern = [%r] %F %L %m%n
+
+  log4perl.appender.Screen               = Log::Log4perl::Appender::Screen
+  log4perl.appender.Screen.stderr        = 1
+  log4perl.appender.Screen.layout        = Log::Log4perl::Layout::SimpleLayout
+);
+  Log::Log4perl::init( \$conf );
+}
 
 use Util::GlogServer;
 
