@@ -139,9 +139,10 @@ sub run {
               $logdata->{fh}           = $fh;
               $logdata->{lines_read}   = 0;
               $logdata->{lines_logged} = 0;
+              $logdata->{logfile}      = $logfile;
 
-              $log_table->{$logfile} = $logdata;
-              $stream_table->{$stream_obj} = $logfile;
+              $log_table->{$logfile}       = $logdata;
+              $stream_table->{$stream_obj} = $logdata;
 
               $self->_log_table($log_table);
 
@@ -173,7 +174,7 @@ sub run {
             $log->debug( "Cleaning up after: $stream_obj" );
             my $stream_table = $self->_stream_table;
             my $log_table    = $self->_log_table;
-            my $logfile      = $stream_table->{$stream_obj};
+            my $logfile      = $stream_table->{$stream_obj}->{logfile};
 
             delete $stream_table->{$stream_obj};
             delete $log_table->{$logfile};
@@ -183,7 +184,10 @@ sub run {
 
             $stream_obj->close;
           } elsif ( $$buffref =~ s/^(.*)\n// ) {
-            $log->info( "$1" );
+            my $stream_table = $self->_stream_table;
+            my $out_fh       = $stream_table->{$stream_obj}->{fh};
+            #$log->info( "$1" );
+            $out_fh->write("$1\n");
             return 1;
           }
         }
