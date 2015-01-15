@@ -43,12 +43,13 @@ sub _build_loop {
 sub run {
   my $self = shift;
   my $sockpath = $self->sockpath;
+  my $log      = $self->logger;
 
   my $loop = $self->_loop();
   my $id = $loop->attach_signal(
             'INT',
             sub {
-              say "Received SIGINT";
+              $log->warn( "Received SIGINT" );
               $self->_loop->stop;
               unlink $sockpath;
             });
@@ -104,30 +105,30 @@ sub run {
               my %client_args = %+;
               when (/^LOGFILE$/) {
                 $logfile = $client_args{dirval};
-                say "Client requested log file: $logfile";
+                $log->debug( "Client requested log file: $logfile" );
               }
               when (/^BUFFERED$/) {
                 $buffered = $client_args{dirval};
-                say "Client requested buffering: $buffered";
+                $log->debug( "Client requested buffering: $buffered" );
               }
               when (/^BUFFER_SIZE$/) {
                 $buffer_size = $client_args{dirval};
-                say "Client requested buffer size: $buffer_size";
+                $log->debug( "Client requested buffer size: $buffer_size" );
               }
               when (/^COMPRESS$/) {
                 $compress = $client_args{dirval};
-                say "Client requested bzip2 compression: $compress";
+                $log->debug( "Client requested bzip2 compression: $compress" );
               }
               when (/^COMPRESS_LEVEL$/) {
                 $compress_level = $client_args{dirval};
-                say "Client requested bzip2 compression level: $compress_level";
+                $log->debug( "Client requested bzip2 compression level: $compress_level" );
               }
             }
           }
 
           # Reject if already in list of files we're managing
           if ( exists( $log_table->{$logfile} ) ) {
-            say "Log file $logfile already being written to!\n";
+            $log->error( "Log file $logfile already being written to!" );
             # TODO: Send reject message and close message
             $stream->close;
           } else {
@@ -144,16 +145,16 @@ sub run {
 
               $self->_log_table($log_table);
 
-              say Data::Dumper->Dump([ $log_table ]);
+              $log->debug( Data::Dumper->Dump([ $log_table ]) );
             } else {
               # TODO: Send reject message and close connection
-              say "Unable to open file $logfile";
+              $log->error( "Unable to open file $logfile" );
               $stream->close;
             }
           }
 
           if ($eof) {
-            say "WEIRD: Got an eof at the beginning of a connection";
+            $log->warn( "WEIRD: Got an eof at the beginning of a connection" );
           }
 
           # Ok, we've finished talking to the client, now restore the default
@@ -169,7 +170,7 @@ sub run {
           if ($eof) {
             # TODO: flush the output log and clean up
             # TODO: Close outgoing filehandle
-            say "Cleaning up after: $stream_obj";
+            $log->debug( "Cleaning up after: $stream_obj" );
             my $stream_table = $self->_stream_table;
             my $log_table    = $self->_log_table;
             my $logfile      = $stream_table->{$stream_obj};
@@ -182,7 +183,7 @@ sub run {
 
             $stream_obj->close;
           } elsif ( $$buffref =~ s/^(.*)\n// ) {
-            say "$1";
+            $log->info( "$1" );
             return 1;
           }
         }
