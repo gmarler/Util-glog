@@ -2,4 +2,10 @@
   That is, data that isn't line oriented, but which can be
   purely written out in terms of the current buffer size.
 
+* Rotate server log files via the mechanism specified at:
+  https://metacpan.org/pod/Log::Log4perl::FAQ#How-can-I-roll-over-my-logfiles-automatically-at-midnight
+  But by size and count, not by midnight/time
+
+* Do documentation in Pod::Weaver format
+
 
