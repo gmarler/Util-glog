@@ -31,7 +31,7 @@ has '_stream_table' => (is => 'rw', isa => 'HashRef',
                         default => sub { return {}; },
                        );
 
-has '_server_logfile' => (is => 'ro', isa => 'Str',
+has 'server_logfile' => (is => 'ro', isa => 'Str',
                           default => '/tmp/glogserver2.log',
                          );
 

@@ -3,13 +3,13 @@
 use feature ':5.18';
 use feature qw(say);
 use Log::Log4perl;
+use Util::GlogServer;
 
-BEGIN {
 my $conf = q(
   log4perl.rootLogger                    = DEBUG, Logfile, Screen
 
   log4perl.appender.Logfile              = Log::Log4perl::Appender::File
-  log4perl.appender.Logfile.filename     = /tmp/glogserver2.log
+  log4perl.appender.Logfile.filename     = sub { $main::app->server_logfile; };
   log4perl.appender.Logfile.layout       = Log::Log4perl::Layout::PatternLayout
   log4perl.appender.Logfile.layout.ConversionPattern = [%d] %m%n
 
@@ -18,11 +18,13 @@ my $conf = q(
   log4perl.appender.Screen.layout       = Log::Log4perl::Layout::PatternLayout
   log4perl.appender.Screen.layout.ConversionPattern = %m%n
 );
-  Log::Log4perl::init( \$conf );
-}
 
-use Util::GlogServer;
 
-my $app = Util::GlogServer->new_with_options();
+# For this bit of Log::Log4perl trickery (specifying a path for the log file)
+# the $app variable needs to be global.
+our $app = Util::GlogServer->new_with_options();
+
+Log::Log4perl::init( \$conf );
 
 $app->run();
+
