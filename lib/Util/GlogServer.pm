@@ -9,6 +9,7 @@ with 'MooseX::Getopt';
 with 'MooseX::Log::Log4perl';
 use IO::Async::Loop;
 use IO::File;
+use IO::Compress::Bzip2;
 use Data::Dumper;
 
 use namespace::autoclean;
@@ -67,7 +68,15 @@ sub run {
       my ( $stream ) = @_;
 
       my $log_table = $self->_log_table;
+      # TODO: This is the point to check whether there is a global timer present
+      #       to count down till the next midnight.  If not, we should create
+      #       one here.
+      #       Only one will ever be needed to rotate all of the extant log file
+      #       streams.
+
+      # TODO: This might need to be broken out into another object/role
       my $logdata = {};
+
       # PROTOCOL:
       #
       # CLIENT: Send desired log pathname
@@ -132,8 +141,16 @@ sub run {
             # TODO: Send reject message and close message
             $stream->close;
           } else {
+            # TODO: Use _create_fh method here instead
+            # my $fh =
+            # $self->_create_fh(logfile => $logfile, buffered => $buffered,
+            #                   buffer_size => buffer_size,
+            #                   compress => $compress,
+            #                   compress_level => $compress_level);
+            #
             if (my $fh = IO::File->new($logfile,">>")) {
-              # TODO: Send Acceptance message
+              # TODO: Send Acceptance message back to client after we've
+              #       proven we can open the destination log file
 
               if ( not $buffered ) {
                 $log->debug("Disabling buffering");
@@ -209,6 +226,23 @@ sub run {
   );
 
   $loop->run;
+}
+
+# TODO: Turn these into Pod::Weaver directives
+
+=head2 _create_fh
+
+Create filehandle, the type of which is based on parameters passed in from each
+client invocation.
+
+This appends the -YYYYMMDD suffix to the file too.
+
+=cut
+
+sub _create_fh {
+  my ($self, %args) = @_;
+
+
 }
 
 1;
