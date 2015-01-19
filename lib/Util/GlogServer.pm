@@ -8,6 +8,7 @@ use Moose;
 with 'MooseX::Getopt';
 with 'MooseX::Log::Log4perl';
 use IO::Async::Loop;
+use IO::Async::Timer::Countdown;
 use IO::File;
 use IO::Compress::Bzip2;
 use Data::Dumper;
@@ -243,6 +244,10 @@ sub _create_fh {
   my ($self, %args) = @_;
 
 
+}
+
+sub _add_midnight_timer {
+  my ($self) = shift;
 }
 
 1;

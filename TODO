@@ -1,0 +1,5 @@
+* Add ability for client to say it's logging binary data.
+  That is, data that isn't line oriented, but which can be
+  purely written out in terms of the current buffer size.
+
+
