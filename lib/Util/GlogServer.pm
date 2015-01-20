@@ -2,7 +2,6 @@ package Util::GlogServer;
 
 use feature ':5.18';
 use feature qw(say);
-use feature qw(switch);
 
 use Moose;
 with 'MooseX::Getopt';
@@ -78,6 +77,7 @@ sub run {
       #       streams.
 
       # TODO: This might need to be broken out into another object/role
+      #       Like Util::GlogServer::Stream???  Or is that something else?
       my $stream_data = {};
 
       # PROTOCOL:
@@ -113,27 +113,33 @@ sub run {
                                   ): \s+
                                    (?<dirval>\S+)\n//x )
           {
-            given ($+{directive}) {
+            SWITCH:
+            foreach ($+{directive}) {
               my %client_args = %+;
-              when (/^LOGFILE$/) {
+              if (/^LOGFILE$/) {
                 $logfile = $client_args{dirval};
                 $log->debug( "Client requested log file: $logfile" );
+                last SWITCH;
               }
-              when (/^BUFFERED$/) {
+              if (/^BUFFERED$/) {
                 $buffered = $client_args{dirval};
                 $log->debug( "Client requested buffering: $buffered" );
+                last SWITCH;
               }
-              when (/^BUFFER_SIZE$/) {
+              if (/^BUFFER_SIZE$/) {
                 $buffer_size = $client_args{dirval};
                 $log->debug( "Client requested buffer size: $buffer_size" );
+                last SWITCH;
               }
-              when (/^COMPRESS$/) {
+              if (/^COMPRESS$/) {
                 $compress = $client_args{dirval};
                 $log->debug( "Client requested bzip2 compression: $compress" );
+                last SWITCH;
               }
-              when (/^COMPRESS_LEVEL$/) {
+              if (/^COMPRESS_LEVEL$/) {
                 $compress_level = $client_args{dirval};
                 $log->debug( "Client requested bzip2 compression level: $compress_level" );
+                last SWITCH;
               }
             }
           }
