@@ -9,17 +9,24 @@ use IO::Async::Timer::Countdown;
 use IO::File;
 use IO::Compress::Bzip2;
 use Data::Dumper;
+use Moose::Util::TypeConstraints;
 
 use namespace::autoclean;
 
+# Define these, so we can use them in type unions below as needed
+class_type 'IO::File';
+class_type 'IO::All::File';
+class_type 'IO::Uncompress::Bunzip2';
+
+
 has 'logfile_base' => ( is => 'rw', isa => 'Str',
-                        default => "" );
+                        required => 1, );
 
 has 'logfile_full' => ( is => 'rw', isa => 'Str',
                         default => "" );
 
-# TODO: Use Bzip2 file type as well, and IO::All, just in case
-has 'fh'           => ( is => 'rw', isa => 'IO::File',
+has 'fh'           => ( is => 'rw',
+                        isa => 'IO::File | IO::All::File | IO::Uncompress::Bunzip2',
                         default => undef );
 
 has 'lines_read'   => ( is => 'rw', isa => 'Int',

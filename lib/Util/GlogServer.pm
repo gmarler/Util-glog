@@ -11,6 +11,8 @@ use IO::Async::Loop;
 use IO::Async::Timer::Countdown;
 use IO::File;
 use IO::Compress::Bzip2;
+use DateTime;
+use DateTime::Format::Duration;
 use Data::Dumper;
 
 use namespace::autoclean;
@@ -249,5 +251,54 @@ sub _create_fh {
 sub _add_midnight_timer {
   my ($self) = shift;
 }
+
+sub _refresh_expiration {
+  my ($self) = shift;
+  my ($l) = $self->logger;
+
+  # Have to use local time zone, or the midnight calculations won't come out as
+  # we expect.  In particular don't use the floating or GMT time zones, unless
+  # you want all hosts to think of midnight as offset from GMT.
+  my $localTZ = DateTime::TimeZone->new( name => 'local' );
+  #$l->debug("Time Zone is: " . $localTZ->name() );
+
+  # Get current time, truncate to seconds because we don't care about nanosecs
+  # in this case
+  my $now = DateTime->now( time_zone => $localTZ )
+                    ->truncate( to => 'second' );
+  $l->debug("Now: " . $now->strftime("%D %T") );
+
+  # Get next day
+  my $tomorrow = $now->clone->add( days => 1 );
+  $l->debug("TOMORROW: " . $tomorrow->strftime("%D %T") );
+  # Now set to midnight of that day
+  my $midnight = $tomorrow->clone()->set( hour   => 0,
+                                          minute => 0,
+                                          second => 0,
+                                        );
+
+  $l->debug("MIDNIGHT " . $midnight->strftime("%D %T") );
+
+  # Get the duration from now till midnight
+  my $dur = $midnight->subtract_datetime_absolute($now);
+
+  # Print the Duration in seconds
+  my $fmt_secs = DateTime::Format::Duration->new( pattern => '%S' );
+  my $fmt_full = DateTime::Format::Duration->new( pattern   => '%e days, %r',
+                                                  normalize => 1,
+                                                );
+
+  my $secs_till_midnight = $fmt_secs->format_duration( $dur );
+  my $time_till_midnight = $fmt_full->format_duration( $dur );
+
+  $l->debug("SECONDS till midnight: $secs_till_midnight");
+  $l->debug("NORMALIZED TIME till midnight: $time_till_midnight");
+
+  #  $self->_expiration($secs_till_midnight);
+
+  return $secs_till_midnight;
+}
+
+
 
 1;
