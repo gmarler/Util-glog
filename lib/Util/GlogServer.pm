@@ -76,7 +76,7 @@ sub run {
       #       streams.
 
       # TODO: This might need to be broken out into another object/role
-      my $logdata = {};
+      my $stream_data = {};
 
       # PROTOCOL:
       #
@@ -159,13 +159,13 @@ sub run {
               }
 
               # Set up log data for this client
-              $logdata->{fh}           = $fh;
-              $logdata->{lines_read}   = 0;
-              $logdata->{lines_logged} = 0;
-              $logdata->{logfile}      = $logfile;
+              $stream_data->{fh}           = $fh;
+              $stream_data->{lines_read}   = 0;
+              $stream_data->{lines_logged} = 0;
+              $stream_data->{logfile}      = $logfile;
 
-              $log_table->{$logfile}       = $logdata;
-              $stream_table->{$stream_obj} = $logdata;
+              $log_table->{$logfile}       = $stream_data;
+              $stream_table->{$stream_obj} = $stream_data;
 
               $self->_log_table($log_table);
 
