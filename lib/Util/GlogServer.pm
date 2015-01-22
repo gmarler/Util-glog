@@ -48,6 +48,8 @@ sub run {
   my $sockpath = $self->sockpath;
   my $log      = $self->logger;
 
+  $self->_add_midnight_timer();
+
   my $loop = $self->_loop();
   my $id = $loop->attach_signal(
             'INT',
@@ -229,12 +231,14 @@ sub run {
     },
 
     on_listen_error => sub {
-      print STDERR "Cannot listen - do you need to remove the socket?\n";
+      $log->error( "Cannot listen - do you need to remove the socket [",
+                   $self->sockpath, "]?");
       exit(1);
     },
   );
 
-  $loop->run;
+  #$loop->run;
+  $loop->new_future;
 }
 
 # TODO: Turn these into Pod::Weaver directives
@@ -256,53 +260,43 @@ sub _create_fh {
 
 sub _add_midnight_timer {
   my ($self) = shift;
-}
 
-sub _refresh_expiration {
-  my ($self) = shift;
-  my ($l) = $self->logger;
+  my $log  = $self->logger;
+  my $loop = $self->_loop;
 
   # Have to use local time zone, or the midnight calculations won't come out as
   # we expect.  In particular don't use the floating or GMT time zones, unless
   # you want all hosts to think of midnight as offset from GMT.
-  my $localTZ = DateTime::TimeZone->new( name => 'local' );
-  #$l->debug("Time Zone is: " . $localTZ->name() );
 
-  # Get current time, truncate to seconds because we don't care about nanosecs
-  # in this case
-  my $now = DateTime->now( time_zone => $localTZ )
-                    ->truncate( to => 'second' );
-  $l->debug("Now: " . $now->strftime("%D %T") );
+  # Set to today's midnight, then add one day, to get the next midnight
+  my $midnight = DateTime->now( time_zone => 'local')
+                         ->set(hour => 0, minute => 0, second => 0)
+                         ->add( days => 1 );
 
-  # Get next day
-  my $tomorrow = $now->clone->add( days => 1 );
-  $l->debug("TOMORROW: " . $tomorrow->strftime("%D %T") );
-  # Now set to midnight of that day
-  my $midnight = $tomorrow->clone()->set( hour   => 0,
-                                          minute => 0,
-                                          second => 0,
-                                        );
+  my $now = DateTime->now;
 
-  $l->debug("MIDNIGHT " . $midnight->strftime("%D %T") );
+  my $secs_till_midnight = $midnight->subtract_datetime_absolute($now)
+                                    ->in_units( 'seconds' );
+  $log->debug("Installing a timer that will expire at midnight - ",
+              "[$secs_till_midnight] seconds from now");
 
-  # Get the duration from now till midnight
-  my $dur = $midnight->subtract_datetime_absolute($now);
+  my $timer = IO::Async::Timer::Countdown->new(
+                delay => $secs_till_midnight,
+                remove_on_expire => 1,
 
-  # Print the Duration in seconds
-  my $fmt_secs = DateTime::Format::Duration->new( pattern => '%S' );
-  my $fmt_full = DateTime::Format::Duration->new( pattern   => '%e days, %r',
-                                                  normalize => 1,
-                                                );
+                on_expire => sub {
+                  my ($timer_self) = shift;
 
-  my $secs_till_midnight = $fmt_secs->format_duration( $dur );
-  my $time_till_midnight = $fmt_full->format_duration( $dur );
+                  $log->debug("It's midnight!  Time to rotate the logs!");
+                  # TODO: Call the method to rotate all logs
+                  # Then call this method again to re-install the timer
+                  $self->_add_midnight_timer();
+                },
+              );
 
-  $l->debug("SECONDS till midnight: $secs_till_midnight");
-  $l->debug("NORMALIZED TIME till midnight: $time_till_midnight");
+  $timer->start;
 
-  #  $self->_expiration($secs_till_midnight);
-
-  return $secs_till_midnight;
+  $loop->add( $timer );
 }
 
 
