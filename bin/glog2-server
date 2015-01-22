@@ -26,5 +26,7 @@ our $app = Util::GlogServer->new_with_options();
 
 Log::Log4perl::init( \$conf );
 
-$app->run();
+my $future = $app->run();
+
+$future->loop->run();
 
