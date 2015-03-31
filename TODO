@@ -1,6 +1,11 @@
 * Add ability for client to say it's logging binary data.
   That is, data that isn't line oriented, but which can be
   purely written out in terms of the current buffer size.
+  * This will involve the server sending a message to the client
+    at log rotation time, and the client stopping the client, notifying
+    the server it's been stopped, to the server can flush the remaining
+    data to the log file.
+    The client will then need to start its program anew.
 
 * Rotate server log files via the mechanism specified at:
   https://metacpan.org/pod/Log::Log4perl::FAQ#How-can-I-roll-over-my-logfiles-automatically-at-midnight
