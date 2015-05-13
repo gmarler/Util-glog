@@ -42,6 +42,8 @@ my $routine = IO::Async::Routine->new(
     while ( my $d = $dchan->recv ) {
 
       if (exists $d->{command}) {
+        $f->close() if ($fh);
+
         my ($filename,$compress,$buffer) =
           @{$d->{command}}{ qw( filename compress buffer ) };
 
@@ -61,7 +63,7 @@ my $routine = IO::Async::Routine->new(
       } elsif (exists $d->{data}) {
         $fh->print($d->{data});
       } else {
-        $fh->close();
+        $fh->close() if ($fh);
         die "Don't know what to do!";
       }
     }
