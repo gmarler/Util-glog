@@ -12,9 +12,9 @@ has 'gserver'  => ( is => 'rw', isa => 'Util::GlogServer', );
 # The test Unix Socket path the server and client will use
 has 'sockpath' => (is => 'rw', isa => 'Str', default => '/tmp/gclient_tdd.sock', );
 
-has 'serverchildren' => (is => 'rw', isa => 'ArrayRef', default => sub { return []; }, 
+has 'serverchildren' => (is => 'rw', isa => 'ArrayRef', default => sub { return []; }, );
 
-has 'clientchildren' => (is => 'rw', isa => 'ArrayRef', default => sub { return []; },
+has 'clientchildren' => (is => 'rw', isa => 'ArrayRef', default => sub { return []; }, );
 
 sub test_startup {
   my ($test) = shift;
