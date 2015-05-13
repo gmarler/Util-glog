@@ -33,6 +33,10 @@ has '_loop'       => (is => 'rw', isa => 'IO::Async::Loop', lazy => 1,
                       builder => '_build_loop',
                      );
 
+has '_server_sockpath' => (is => 'ro', isa => 'Str',
+                           default => "/tmp/glogserver2.sock",
+                          );
+
 sub BUILD {
   my $self = shift;
 }
@@ -69,7 +73,7 @@ sub test {
     addr => {
       family    => "unix",
       socktype  => "stream",
-      path      => "/tmp/glogserver2.sock",
+      path      => $self->_server_sockpath;
     },
     on_connected => sub {
       my ($handle) = shift;
