@@ -117,7 +117,8 @@ sub test {
     on_read => sub {
       my ( $stream, $buffref ) = @_;
       while ( $$buffref =~ s/^(.*)\n// ) {
-        # TODO: Count lines read from STDOUT of child
+        # TODO: Count lines read from STDOUT of child, if the output is NOT
+        #       binary
         $server_socket->write("$1\n");
       }
 
@@ -129,7 +130,8 @@ sub test {
     on_read => sub {
       my ( $stream, $buffref ) = @_;
       while ( $$buffref =~ s/^(.*)\n// ) {
-        # TODO: Count lines read from STDERR of child
+        # TODO: Count lines read from STDERR of child, if the output is NOT
+        #       binary
         $server_socket->write("$1\n");
       }
 
