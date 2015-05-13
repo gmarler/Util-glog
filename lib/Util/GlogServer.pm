@@ -6,6 +6,8 @@ use feature qw(say);
 use Moose;
 with 'MooseX::Getopt';
 with 'MooseX::Log::Log4perl';
+use IO::Async::Routine;
+use IO::Async::Channel;
 use IO::Async::Loop;
 use IO::Async::Timer::Countdown;
 use IO::File;

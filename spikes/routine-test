@@ -1,0 +1,154 @@
+#!/usr/perl5/5.18.1/bin/perl
+
+use feature ':5.18';
+use feature qw(say);
+
+use IO::Compress::Bzip2    qw();
+use Data::Dumper           qw();
+
+use IO::Async::Routine;
+use IO::Async::Channel;
+
+use IO::Async::Loop;
+
+
+my $buf;
+
+while (length($buf) <= 1024 * 1024) {
+  $buf .= rand_string(80, 'A'..'Z', 'a'..'z', '0'..'9', '-', '_', '.') . "\n";
+}
+
+
+my $loop = IO::Async::Loop->new;
+
+my $dchan = IO::Async::Channel->new;
+
+my $routine = IO::Async::Routine->new(
+  #model        => "thread",
+  channels_in  => [ $dchan ],
+# channels_out => [ ],
+
+  code => sub {
+#   $dchan->recv(
+#     on_recv => sub {
+#       my ($ch, $argref) = @_;
+
+#       say "Got data";
+#       $loop->stop;
+#     }
+#   );
+    my $fh;  # Filehandle we'll be writing to, if we need it
+
+    while ( my $d = $dchan->recv ) {
+
+      if (exists $d->{command}) {
+        my ($filename,$compress,$buffer) =
+          @{$d->{command}}{ qw( filename compress buffer ) };
+
+        if ($compress) {
+          $fh = IO::Compress::Bzip2->new( $filename,
+                                          BlockSize100K => 9,
+                                          Append        => 1,
+                                        );
+        } else {
+          $fh = IO::File->new( $filename, ">>" );
+        }
+
+        if ( not $buffer) {
+          $fh->autoflush(1);
+        }
+
+      } elsif (exists $d->{data}) {
+        $fh->print($d->{data});
+      } else {
+        $fh->close();
+        die "Don't know what to do!";
+      }
+    }
+
+    $fh->close();
+  },
+
+  on_finish => sub {
+    say "The routine aborted early - $_[-1]";
+    $loop->stop;
+  },
+);
+
+$loop->add($routine);
+
+my $cmd = { filename  => "/tmp/test-data-$$",
+            compress  => 1,
+            buffer    => 1,
+          };
+
+$dchan->send( { command => $cmd } );
+
+
+
+# Read from data source and send over to routine for writing / compressing, as
+# the need may be
+#
+my $process = IO::Async::Process->new(
+  command => [ 'mpstat -Tu 1' ],
+  stdout => { via => 'pipe_read' },
+  stderr => { via => 'pipe_read' },
+  on_finish => sub { print "The child process has finished\n";
+    $loop->stop;
+    exit(0);
+  },
+);
+
+$process->stdout->configure(
+  on_read => sub {
+    my ( $stream, $buffref ) = @_;
+    while ( $$buffref =~ s/^(.+)//sm ) {
+      # TODO: Count lines read from STDOUT of child, if the output is NOT
+      #       binary
+      $dchan->send( { data => "$1\n" } );
+    }
+
+    return 0;
+  },
+);
+
+$process->stderr->configure(
+  on_read => sub {
+    my ( $stream, $buffref ) = @_;
+    while ( $$buffref =~ s/^(.*)\n// ) {
+      # TODO: Count lines read from STDERR of child, if the output is NOT
+      #       binary
+      $dchan->send( { data => "$1\n" } );
+    }
+
+    return 0;
+  },
+);
+
+$loop->add( $process );
+
+#
+# An alternate test that sends a large buffer over and over
+#
+# my $total_iters = 100;
+# 
+# for (my $i = 0; $i < $total_iters; $i++) {
+#   $dchan->send( { data => $buf } );
+#   sleep(1);
+# }
+
+
+# $routine->kill(1);
+
+#
+# Now set the loop in motion
+#
+$loop->run;
+
+
+sub rand_string {
+  my $length = shift;
+  my @vals   = @_;
+
+  join '', @vals[ map{ rand @vals } 1 .. $length ];
+}
