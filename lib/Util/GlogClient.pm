@@ -73,7 +73,7 @@ sub test {
     addr => {
       family    => "unix",
       socktype  => "stream",
-      path      => $self->_server_sockpath;
+      path      => $self->_server_sockpath,
     },
     on_connected => sub {
       my ($handle) = shift;
