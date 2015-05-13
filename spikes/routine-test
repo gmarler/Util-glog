@@ -37,6 +37,13 @@ my $routine = IO::Async::Routine->new(
 #       $loop->stop;
 #     }
 #   );
+   
+#    if ( @_ ) {
+#      Data::Dumper->Dump( [ @_ ] );
+#    } else {
+#      say "routine called with no args";
+#    }
+
     my $fh;  # Filehandle we'll be writing to, if we need it
 
     while ( my $d = $dchan->recv ) {
