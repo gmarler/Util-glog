@@ -9,7 +9,7 @@ with 'MooseX::Log::Log4perl';
 use IO::Async::Loop;
 use IO::Async::Timer::Countdown;
 use IO::File;
-use IO::Compress::Bzip2;
+use IO::Compress::Bzip2           qw( $Bzip2Error );
 use DateTime;
 use DateTime::Format::Duration;
 use Data::Dumper;

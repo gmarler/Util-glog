@@ -3,6 +3,8 @@ package TF::Util::GlogClient;
 use Log::Log4perl     qw();
 use Util::GlogServer  qw();
 use Child             qw();
+use File::Temp        qw();
+use File::MMagic      qw();
 
 use Test::Class::Moose;
 with 'Test::Class::Moose::Role::AutoUse';
@@ -55,7 +57,6 @@ sub test_startup {
       }
     );
   my $proc = $child->start();
-  diag( "PROC is: " . $proc );
   push @{$test->serverchildren}, $proc;
 }
 
@@ -63,9 +64,10 @@ sub test_shutdown {
   my $test = shift;
   # more teardown
   $test->next::method;
+
   # Shut Down the GlogServer
   my $proc = shift @{$test->serverchildren};
-  $proc->kill(1);
+  $proc->kill(2);  # SIGINT is handled
 }
 
 # TODOs:
@@ -82,6 +84,64 @@ sub test_server_is_ok {
   # It'll take a second or two before the socket is created
   sleep(1);
   is( -S $test->sockpath, 1, "Test Unix socket " . $test->sockpath . " exists" );
+}
+
+sub test_uncompressed_one_client {
+  my $test = shift;
+
+  my $logfile = File::Temp->new();
+
+  sleep(1);
+  # fork() off a single test GlogClient, in uncompressed mode, that runs for 5 seconds and exits
+  my $child =
+    Child->new(
+      sub {
+        my ($parent) = @_;
+        my $client = Util::GlogClient->new( _server_sockpath => $test->sockpath,
+                                            compress         => 0,
+                                            command          => '/bin/mpstat -Td 1 5',
+                                            logfile          => $logfile->filename,
+                                          );
+        $client->test();
+      }
+    );
+  my $proc = $child->start();
+  push @{$test->clientchildren}, $proc;
+
+  $proc->wait();
+  cmp_ok( -s $logfile, '>=', 1, 'log file actually has contents');
+  my $mm = File::MMagic->new();
+  my $mime_type = $mm->checktype_filename($logfile);
+  like( $mime_type, qr{text/plain}, 'Log file is uncompressed');
+}
+
+sub test_compressed_one_client {
+  my $test = shift;
+
+  my $logfile = File::Temp->new();
+
+  sleep(1);
+  # fork() off a single test GlogClient, in uncompressed mode, that runs for 5 seconds and exits
+  my $child =
+    Child->new(
+      sub {
+        my ($parent) = @_;
+        my $client = Util::GlogClient->new( _server_sockpath => $test->sockpath,
+                                            compress         => 1,
+                                            command          => '/bin/mpstat -Td 1 5',
+                                            logfile          => $logfile->filename,
+                                          );
+        $client->test();
+      }
+    );
+  my $proc = $child->start();
+  push @{$test->clientchildren}, $proc;
+
+  $proc->wait();
+  cmp_ok( -s $logfile, '>=', 1, 'log file actually has contents');
+  my $mm = File::MMagic->new();
+  my $mime_type = $mm->checktype_filename($logfile);
+  like( $mime_type, qr{application/x-bzip2}, 'Log file is bzip2 compressed');
 }
 
 1;
