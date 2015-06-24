@@ -107,6 +107,7 @@ sub run {
 
           my $stream_table = $self->_stream_table;
 
+          # TODO: $self->_process_client_connect_directives()
           while ( $$buffref =~ s/^(?<directive>
                                    (?:LOGFILE|
                                       BUFFERED|
@@ -154,39 +155,16 @@ sub run {
             # TODO: Send reject message and close message
             $stream->close;
           } else {
-            # TODO: Use _create_fh method here instead
-            # my $fh =
-            # $self->_create_fh(logfile => $logfile, buffered => $buffered,
-            #                   buffer_size => buffer_size,
-            #                   compress => $compress,
-            #                   compress_level => $compress_level);
-            #
-            if (my $fh = IO::File->new($logfile,">>")) {
-              # TODO: Send Acceptance message back to client after we've
-              #       proven we can open the destination log file
-
-              if ( not $buffered ) {
-                $log->debug("Disabling buffering");
-                $fh->autoflush(1);
-              }
-
-              # Set up log data for this client
-              $stream_data->{fh}           = $fh;
-              $stream_data->{lines_read}   = 0;
-              $stream_data->{lines_logged} = 0;
-              $stream_data->{logfile}      = $logfile;
-
-              $log_table->{$logfile}       = $stream_data;
-              $stream_table->{$stream_obj} = $stream_data;
-
-              $self->_log_table($log_table);
-
-              $log->debug( Data::Dumper->Dump([ $log_table ]) );
-            } else {
-              # TODO: Send reject message and close connection
-              $log->error( "Unable to open file $logfile" );
-              $stream->close;
-            }
+            # Use _create_fh method here instead
+            # TODO: But we don't seem to need the $fh returned here, as we've
+            # already squirrelled it away in _create_fh
+            my $fh =
+              $self->_create_fh(logfile        => $logfile,
+                                buffered       => $buffered,
+                                buffer_size    => $buffer_size,
+                                compress       => $compress,
+                                compress_level => $compress_level,
+                                stream         => $stream);
           }
 
           if ($eof) {
@@ -199,6 +177,9 @@ sub run {
         }
       );
 
+      # We add this to the stream after it's been accepted from the client, and
+      # we know where the output is going, so the stream knows how to deal with
+      # the data about to flood in, until the incoming data stops.
       $stream->configure(
         on_read => sub {
           my ( $stream_obj, $buffref, $eof ) = @_;
@@ -257,7 +238,40 @@ This appends the -YYYYMMDD suffix to the file too.
 sub _create_fh {
   my ($self, %args) = @_;
 
+  my $log          = Log::Log4perl->get_logger();
+  my $stream_data  = {};
+  my $log_table    = $self->_log_table;
+  my $stream_table = $self->_stream_table;
+  my $fh;
 
+  if ($fh = IO::File->new($args{logfile},">>")) {
+    # TODO: Send Acceptance message back to client after we've
+    #       proven we can open the destination log file
+
+    if ( not $args{buffered} ) {
+      $log->debug("Disabling buffering");
+      $fh->autoflush(1);
+    }
+
+    # Set up log data for this client
+    $stream_data->{fh}           = $fh;
+    $stream_data->{lines_read}   = 0;
+    $stream_data->{lines_logged} = 0;
+    $stream_data->{logfile}      = $args{logfile};
+
+    $log_table->{$logfile}       = $stream_data;
+    $stream_table->{$stream_obj} = $stream_data;
+
+    $self->_log_table($log_table);
+
+    $log->debug( Data::Dumper->Dump([ $log_table ]) );
+  } else {
+    # TODO: Send reject message and close connection
+    $log->error( "Unable to open file $args{logfile}" );
+    $args{stream}->close;
+  }
+
+  return $fh;
 }
 
 sub _add_midnight_timer {
